@@ -1,0 +1,13 @@
+module {{module_name}} 1.0;
+
+require {{ '{' }}
+{% for type in types.keys() %}
+    type {{ type }};
+{% endfor %}
+{% for class_ in classes %}
+    class {{ class_ }} {{ '{' }} {{ classes[class_].keys()|join(' ') }} {{ '}' }};
+{% endfor %}
+{{ '}' }}
+{% for rule in rules %}
+{{ rule }}
+{% endfor %}
