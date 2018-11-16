@@ -13,16 +13,26 @@ import subprocess
 import re
 import json
 import sys
+import argparse
+
+logger = logging.getLogger(__name__)
 
 cmd = Path(sys.argv[0])
 app_root = str(cmd.parent.absolute())
 
 host = socket.gethostname()
+
+parser = argparse.ArgumentParser(description="Manage SELinux modules")
+parser.add_argument('--hostname', help="Specify hostname (default is %s)" % host,
+                    default=host, action='store')
+args = parser.parse_args()
+
+host = args.hostname
+
 x = host.split('.')
 x.reverse()
 mod_prefix = '_'.join(x)
 
-logger = logging.getLogger(__name__)
 
 rules = {}
 
