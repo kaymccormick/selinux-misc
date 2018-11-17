@@ -1,0 +1,65 @@
+#!/usr/bin/python3
+
+import logging
+from git import Repo
+import argparse
+from semanage import *
+import os.path
+
+logger = logging.getLogger(__name__)
+
+dist_modules = {}
+for x in ['base', 'example', 'ssh', 'xserver', 'postgresql', 'hotplug', 'selinuxutil', 'logging', 'setrans', 'ipsec', 'sysnetwork', 'application', 'authlogin', 'modutils', 'systemd', 'userdomain', 'fstools', 'locallogin', 'iptables', 'lvm', 'unconfined', 'libraries', 'miscfiles', 'udev', 'getty', 'mount', 'netlabel', 'clock', 'hostname', 'init', 'seunshare', 'amavis', 'razor', 'fprintd', 'polipo', 'java', 'bind', 'clockspeed', 'lircd', 'ddcprobe', 'ksmtuned', 'passenger', 'rhcs', 'ldap', 'vpn', 'dante', 'dbskk', 'pulseaudio', 'dnssectrigger', 'ifplugd', 'munin', 'userhelper', 'pyzor', 'collectd', 'clamav', 'dirmngr', 'tripwire', 'shutdown', 'oddjob', 'gpsd', 'dcc', 'rtkit', 'mon', 'yam', 'varnishd', 'tuned', 'cobbler', 'cachefilesd', 'nscd', 'dhcp', 'canna', 'imaze', 'condor', 'sanlock', 'ricci', 'asterisk', 'tboot', 'perdition', 'qmail', 'redis', 'keystone', 'cups', 'samhain', 'openvswitch', 'rssh', 'cpucontrol', 'gpg', 'mandb', 'ctdb', 'irqbalance', 'rhgb', 'rgmanager', 'iscsi', 'jockey', 'likewise', 'colord', 'firewallgui', 'radius', 'certmonger', 'pcscd', 'lightsquid', 'acct', 'wdmd', 'fakehwclock', 'cron', 'kismet', 'nx', 'hddtemp', 'monop', 'rpm', 'tvtime', 'aiccu', 'rpc', 'fail2ban', 'shibboleth', 'irc', 'cipe', 'bird', 'syncthing', 'xguest', 'avahi', 'bcfg2', 'tgtd', 'tftp', 'rngd', 'arpwatch', 'alsa', 'usbmuxd', 'cyrus', 'obex', 'acpi', 'distcc', 'backup', 'rsync', 'cmirrord', 'l2tp', 'chronyd', 'ptchown', 'mplayer', 'lldpad', 'dbadm', 'ktalk', 'uwimap', 'xscreensaver', 'mojomojo', 'openca', 'uucp', 'prelude', 'brctl', 'vdagent', 'pxe', 'sosreport', 'tzdata', 'systemtap', 'mysql', 'aide', 'vhostmd', 'iodine', 'portslave', 'samba', 'fetchmail', 'pacemaker', 'uuidd', 'smokeping', 'gnome', 'ppp', 'evolution', 'uml', 'howl', 'slocate', 'nut', 'xprint', 'zabbix', 'usbmodules', 'resmgr', 'postfix', 'remotelogin', 'monit', 'smoltclient', 'vlock', 'logwatch', 'drbd', 'callweaver', 'ntp', 'mongodb', 'exim', 'pcmcia', 'git', 'cgroup', 'hal', 'vbetool', 'minissdpd', 'slrnpull', 'setroubleshoot', 'spamassassin', 'memcached', 'tmpreaper', 'bluetooth', 'anaconda', 'chkrootkit', 'mpd', 'tor', 'lsm', 'cyphesis', 'cfengine', 'sensord', 'privoxy', 'ulogd', 'loadkeys', 'aisexec', 'dmidecode', 'wm', 'telepathy', 'readahead', 'nslcd', 'djbdns', 'rhsmcertd', 'cvs', 'kdump', 'soundserver', 'pkcs', 'plymouthd', 'awstats', 'puppet', 'hwloc', 'numad', 'pyicqt', 'nis', 'tcsd', 'amanda', 'cdrecord', 'libmtp', 'dkim', 'gatekeeper', 'postgrey', 'icecast', 'daemontools', 'mrtg', 'sxid', 'pingd', 'bitlbee', 'screen', 'corosync', 'jabber', 'calamaris', 'firstboot', 'hypervkvp', 'mono', 'qpid', 'kdumpgui', 'vnstatd', 'openvpn', 'geoclue', 'dictd', 'bacula', 'boinc', 'psad', 'sysstat', 'cpufreqselector', 'slpd', 'openoffice', 'abrt', 'courier', 'finger', 'rwho', 'qemu', 'lockdev', 'gpm', 'openhpi', 'quantum', 'snort', 'games', 'apache', 'amtu', 'devicekit', 'glance', 'apcupsd', 'man2html', 'comsat', 'accountsd', 'prelink', 'speedtouch', 'tcpd', 'procmail', 'blueman', 'sblim', 'bugzilla', 'minidlna', 'apt', 'keyboardd', 'gift', 'inetd', 'squid', 'ircd', 'lpd', 'pegasus', 'ftp', 'mediawiki', 'milter', 'pwauth', 'podsleuth', 'couchdb', 'mailscanner', 'w3c', 'dnsmasq', 'isns', 'gitosis', 'zarafa', 'xfs', 'policykit', 'rdisc', 'i18n_input', 'certwatch', 'sasl', 'dpkg', 'portage', 'ada', 'sendmail', 'portreserve', 'kerneloops', 'uptime', 'rkhunter', 'rabbitmq', 'denyhosts', 'webalizer', 'usernetctl', 'realmd', 'networkmanager', 'zebra', 'dphysswapfile', 'xen', 'automount', 'pads', 'watchdog', 'updfstab', 'dspam', 'rlogin', 'hadoop', 'logrotate', 'quota', 'roundup', 'mailman', 'dbus', 'vmware', 'gssproxy', 'entropyd', 'shorewall', 'mcelog', 'openct', 'svnserve', 'ddclient', 'publicfile', 'sectoolm', 'modemmanager', 'consolekit', 'certmaster', 'dovecot', 'wine', 'smstools', 'virt', 'raid', 'rshd', 'portmap', 'afs', 'mta', 'ncftool', 'smartmon', 'oident', 'nessus', 'radvd', 'oav', 'snmp', 'firewalld', 'fcoe', 'sambagui', 'livecd', 'zosremote', 'thunderbird', 'timidity', 'mozilla', 'webadm', 'sssd', 'rpcbind', 'ucspitcp', 'nagios', 'transproxy', 'nsd', 'wireshark', 'postfixpolicyd', 'guest', 'gdomap', 'telnet', 'ccs', 'kerberos', 'kudzu', 'stunnel', 'glusterfs', 'inn', 'gnomeclock', 'ntop', 'clogd', 'cgmanager', 'su', 'usermanage', 'sudo', 'dmesg', 'bootloader', 'netutils', 'consoletype', 'mcs', 'filesystem', 'devices', 'storage', 'mls', 'selinux', 'ubac', 'corecommands', 'domain', 'corenetwork', 'files', 'kernel', 'terminal', 'sysadm', 'staff', 'unprivuser', 'auditadm', 'secadm', 'logadm']:
+   dist_modules[x] = True
+   
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--selinux-policy-src', help="Specify path to selinux policy sources.", action="store")
+parser.add_argument('--git-repo', help="Specify git repository directory", action="store")
+
+args = parser.parse_args()
+repo = None
+output_dir = "."
+if args.git_repo:
+   output_dir = args.git_repo
+   if not os.path.exists(args.git_repo):
+      repo = Repo.init(args.git_repo)
+   else:
+      repo = Repo(args.git_repo)
+
+
+sh = semanage_handle_create()
+#semanage_set_create_store(sh, 1);
+if semanage_connect(sh):
+   exit(1)
+   
+(a, modinfos, b) = semanage_module_list(sh)
+i = 0
+index = repo.index
+while i < b:
+      module = semanage_module_list_nth(modinfos, i)
+      (c, name) = semanage_module_info_get_name(sh, module)
+      i = i + 1
+
+      if name in dist_modules:
+         continue
+
+      print(name)
+
+      (result, modkey) = semanage_module_key_create(sh)
+      semanage_module_key_set_name(sh, modkey, name)
+
+      (result, info) = semanage_module_get_module_info(sh, modkey)
+      (result, priority) = semanage_module_info_get_priority(sh, info)
+      semanage_module_key_set_priority(sh, modkey, priority)
+
+      (result,module_content,*x) = semanage_module_extract(sh, modkey, True)
+      base_fname = name + ".cil"
+      fname = output_dir + "/" + base_fname 
+      with open(fname, "w") as f:
+         f.write(module_content)
+
+      index.add([base_fname])
+
+
+commit = index.commit("Commit from semod2")
