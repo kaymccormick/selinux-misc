@@ -1,5 +1,34 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3.7
 
+import sys
+sys.path.insert(0, "/usr/local/lib/python3.7/site-packages")
+
+ftypes = ['AUPARSE_TYPE_UNCLASSIFIED',  'AUPARSE_TYPE_UID', 'AUPARSE_TYPE_GID',
+          'AUPARSE_TYPE_SYSCALL', 'AUPARSE_TYPE_ARCH', 'AUPARSE_TYPE_EXIT',
+          'AUPARSE_TYPE_ESCAPED', 'AUPARSE_TYPE_PERM', 'AUPARSE_TYPE_MODE',
+          'AUPARSE_TYPE_SOCKADDR', 'AUPARSE_TYPE_FLAGS', 'AUPARSE_TYPE_PROMISC',
+          'AUPARSE_TYPE_CAPABILITY', 'AUPARSE_TYPE_SUCCESS', 'AUPARSE_TYPE_A0',
+          'AUPARSE_TYPE_A1', 'AUPARSE_TYPE_A2', 'AUPARSE_TYPE_A3', 'AUPARSE_TYPE_SIGNAL',
+          'AUPARSE_TYPE_LIST', 'AUPARSE_TYPE_TTY_DATA',
+          'AUPARSE_TYPE_SESSION', 'AUPARSE_TYPE_CAP_BITMAP', 'AUPARSE_TYPE_NFPROTO',
+          'AUPARSE_TYPE_ICMPTYPE', 'AUPARSE_TYPE_PROTOCOL',
+          'AUPARSE_TYPE_ADDR', 'AUPARSE_TYPE_PERSONALITY',
+          'AUPARSE_TYPE_SECCOMP', 'AUPARSE_TYPE_OFLAG',
+          'AUPARSE_TYPE_MMAP', 'AUPARSE_TYPE_MODE_SHORT', 'AUPARSE_TYPE_MAC_LABEL',
+          'AUPARSE_TYPE_PROCTITLE', 'AUPARSE_TYPE_HOOK',
+          'AUPARSE_TYPE_NETACTION', 'AUPARSE_TYPE_MACPROTO',
+          'AUPARSE_TYPE_IOCTL_REQ', 'AUPARSE_TYPE_ESCAPED_KEY',
+          'AUPARSE_TYPE_ESCAPED_FILE', 'AUPARSE_TYPE_FANOTIFY']
+
+import semanage
+import audit
+import auparse
+
+ftypemap = {}
+for ftype in ftypes:
+    if hasattr(auparse, ftype):
+        ftypemap[getattr(auparse, ftype)] = ftype
+    
 from tempfile import TemporaryDirectory
 from datetime import datetime
 import time
@@ -25,6 +54,12 @@ host = socket.gethostname()
 parser = argparse.ArgumentParser(description="Manage SELinux modules")
 parser.add_argument('--hostname', help="Specify hostname (default is %s)" % host,
                     default=host, action='store')
+parser.add_argument('--input-directory', help="Specify input source directory for SElinux modules",
+                    default="generated", action="store")
+parser.add_argument('--input-file', help="Specify audit log input for subprocess.",
+                    action="store")
+parser.add_argument('--search', '-s', help="Search the auditlog",
+                    action="store")
 args = parser.parse_args()
 
 host = args.hostname
@@ -36,7 +71,7 @@ mod_prefix = '_'.join(x)
 
 rules = {}
 
-generated = Path('generated')
+generated = Path(args.input_directory)
 comment = ''
 for tesrc in glob.glob("generated/%s_*.te" % mod_prefix):
     print(tesrc)
@@ -78,6 +113,26 @@ for tesrc in glob.glob("generated/%s_*.te" % mod_prefix):
 
 #json.dump(rules, fp=sys.stdout, indent=4)
 
+def mycb(aup, cb_event_type, user_data):
+    if cb_event_type == auparse.AUPARSE_CB_EVENT_READY:
+        if aup.first_record() < 0:
+            return
+        while True:
+            event = aup.get_timestamp()
+            print(event.host)
+            print(str(event))
+            mytype = aup.get_type_name()
+#            print("Record type: %s" % mytype)
+            while True:
+                f = aup.get_field_name()
+                t = aup.get_field_type()
+                v = aup.get_field_str()
+#            if f == 'node':
+#                print(f, ftypes[t], v)
+                if not aup.next_field(): break
+
+            if not aup.next_record(): break
+
 with TemporaryDirectory(None, 'mods-%s-' % mod_prefix) as tempdir:
     out = Path(tempdir)
     if not out.exists():
@@ -89,14 +144,45 @@ with TemporaryDirectory(None, 'mods-%s-' % mod_prefix) as tempdir:
 
     lines = None
     #if len(sys.argv) == 1:
+    ausearch_out = None
+    audit_lines = []
+
+    if args.search:
+        ausearch_proc = subprocess.Popen(['/sbin/ausearch', *(args.search.split(' '))], stdout=subprocess.PIPE)
+        if ausearch_proc.returncode:
+            print("ausearch subprocess failed");
+            exit(1)
+
+#        ausearch_out = x.stdout.decode('utf-8')
+#        audit_lines = ausearch_out.split('\n')
+
+#    print("Audit line count: %d" % len(audit_lines))
+
+    assert ausearch_proc.stdout
+    aup = auparse.AuParser(auparse.AUSOURCE_FEED)
+    aup.add_callback(mycb, 1)
+    
+    while ausearch_proc.returncode is None:
+        (stdout, stderr) = ausearch_proc.communicate()
+        result = aup.feed(stdout)
+
+    aup.flush_feed()
+    
+    aup = None
+    sys.exit(0)
+
     src = 'audit2allow'
-    if len(sys.argv) > 1:
-        x = subprocess.run(['audit2allow', '-i', sys.argv[1]], stdout=subprocess.PIPE)
-    else:
-        x = subprocess.run(['audit2allow', '-b'], stdout=subprocess.PIPE)
+
+    x = subprocess.run(['audit2allow'], stdin=ausearch_proc.stdout, stdout=subprocess.PIPE)
+    
+#    if args.input_file:
+#        x = subprocess.run(['audit2allow', '-i', args.input_file], stdout=subprocess.#PIPE)
+#    else:
+#        x = subprocess.run(['audit2allow', '-b'], stdout=subprocess.PIPE)
     
     if x.returncode:
-        print(x.stderr.decode('utf-8'), file=sys.stderr)
+        print("audit2allow subprocess failed");
+#        print(x.stderr.decode('utf-8'), file=sys.stderr)
         exit(1)
     
     allow = x.stdout.decode('utf-8')
@@ -180,13 +266,13 @@ with TemporaryDirectory(None, 'mods-%s-' % mod_prefix) as tempdir:
         mod_fname = '%s.mod' % module_name
         r = subprocess.run(['checkmodule', '-o', mod_fname, '-m', fname], stdout=subprocess.PIPE)
         if r.returncode:
-            print(r.stderr.decode('utf-8'), file=sys.stderr)
+#            print(r.stderr.decode('utf-8'), file=sys.stderr)
             exit(1)
 
         pp_out = '%s.pp' % module_name
         r = subprocess.run(['semodule_package', '-o', pp_out, '-m', mod_fname], stdout=subprocess.PIPE)
         if r.returncode:
-            print(r.stderr.decode('utf-8'), file=sys.stderr)
+#            print(r.stderr.decode('utf-8'), file=sys.stderr)
             exit(1)
 
     print(tempdir)
