@@ -1,8 +1,9 @@
 #!/usr/bin/env python3.7
-
-import sys
-sys.path.insert(0, "/usr/local/lib/python3.7/site-packages")
-
+## $Id$
+##
+## 
+##
+# following is pulled from enum
 ftypes = ['AUPARSE_TYPE_UNCLASSIFIED',  'AUPARSE_TYPE_UID', 'AUPARSE_TYPE_GID',
           'AUPARSE_TYPE_SYSCALL', 'AUPARSE_TYPE_ARCH', 'AUPARSE_TYPE_EXIT',
           'AUPARSE_TYPE_ESCAPED', 'AUPARSE_TYPE_PERM', 'AUPARSE_TYPE_MODE',
@@ -54,8 +55,7 @@ host = socket.gethostname()
 parser = argparse.ArgumentParser(description="Manage SELinux modules")
 parser.add_argument('--hostname', help="Specify hostname (default is %s)" % host,
                     default=host, action='store')
-parser.add_argument('--input-directory', help="Specify input source directory for SElinux modules",
-                    default="generated", action="store")
+parser.add_argument('--input-directory', help="Specify input source directory for SElinux modules", default="generated", action="store")
 parser.add_argument('--input-file', help="Specify audit log input for subprocess.",
                     action="store")
 parser.add_argument('--search', '-s', help="Search the auditlog",
@@ -119,8 +119,8 @@ def mycb(aup, cb_event_type, user_data):
             return
         while True:
             event = aup.get_timestamp()
-            print(event.host)
-            print(str(event))
+#            print(event.host)
+#            print(str(event))
             mytype = aup.get_type_name()
 #            print("Record type: %s" % mytype)
             while True:
@@ -161,41 +161,35 @@ with TemporaryDirectory(None, 'mods-%s-' % mod_prefix) as tempdir:
     assert ausearch_proc.stdout
     aup = auparse.AuParser(auparse.AUSOURCE_FEED)
     aup.add_callback(mycb, 1)
-    
+
+    audit2allowproc = subprocess.Popen(['audit2allow'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    ausearch_output = b""
+    all_allow_out = b""
     while ausearch_proc.returncode is None:
         (stdout, stderr) = ausearch_proc.communicate()
+        ausearch_output = ausearch_output + stdout
+        print(stdout)
+        (allow_out, allow_err) = audit2allowproc.communicate(stdout)
+        all_allow_out = all_allow_out + allow_out
+        
         result = aup.feed(stdout)
 
     aup.flush_feed()
     
     aup = None
-    sys.exit(0)
 
     src = 'audit2allow'
-
-    x = subprocess.run(['audit2allow'], stdin=ausearch_proc.stdout, stdout=subprocess.PIPE)
+    allow = all_allow_out.decode('utf-8')
     
-#    if args.input_file:
-#        x = subprocess.run(['audit2allow', '-i', args.input_file], stdout=subprocess.#PIPE)
-#    else:
-#        x = subprocess.run(['audit2allow', '-b'], stdout=subprocess.PIPE)
-    
-    if x.returncode:
-        print("audit2allow subprocess failed");
-#        print(x.stderr.decode('utf-8'), file=sys.stderr)
-        exit(1)
-    
-    allow = x.stdout.decode('utf-8')
     lines = allow.split('\n')
     #else:
 #    with open(sys.argv[1], 'r'):
-        
 
     source = None
     for line in lines:
-        if line == '#!!!! This avc is allowed in the current policy':
-            lines.pop(0)
-            continue
+#        if line == '#!!!! This avc is allowed in the current policy':
+#            lines.pop(0)
+#            continue
     
         print(line)
         match = re.match('^#=+\s(\S+)\s=', line)
