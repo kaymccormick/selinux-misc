@@ -7,6 +7,9 @@
 ## following is pulled from enum, could probably use a regexp.
 ftypes=['AUPARSE_TYPE_UNCLASSIFIED','AUPARSE_TYPE_UID','AUPARSE_TYPE_GID','AUPARSE_TYPE_SYSCALL','AUPARSE_TYPE_ARCH','AUPARSE_TYPE_EXIT','AUPARSE_TYPE_ESCAPED','AUPARSE_TYPE_PERM','AUPARSE_TYPE_MODE','AUPARSE_TYPE_SOCKADDR','AUPARSE_TYPE_FLAGS','AUPARSE_TYPE_PROMISC','AUPARSE_TYPE_CAPABILITY','AUPARSE_TYPE_SUCCESS','AUPARSE_TYPE_A0','AUPARSE_TYPE_A1','AUPARSE_TYPE_A2','AUPARSE_TYPE_A3','AUPARSE_TYPE_SIGNAL','AUPARSE_TYPE_LIST','AUPARSE_TYPE_TTY_DATA','AUPARSE_TYPE_SESSION','AUPARSE_TYPE_CAP_BITMAP','AUPARSE_TYPE_NFPROTO','AUPARSE_TYPE_ICMPTYPE','AUPARSE_TYPE_PROTOCOL','AUPARSE_TYPE_ADDR','AUPARSE_TYPE_PERSONALITY','AUPARSE_TYPE_SECCOMP','AUPARSE_TYPE_OFLAG','AUPARSE_TYPE_MMAP','AUPARSE_TYPE_MODE_SHORT','AUPARSE_TYPE_MAC_LABEL','AUPARSE_TYPE_PROCTITLE','AUPARSE_TYPE_HOOK','AUPARSE_TYPE_NETACTION','AUPARSE_TYPE_MACPROTO','AUPARSE_TYPE_IOCTL_REQ','AUPARSE_TYPE_ESCAPED_KEY','AUPARSE_TYPE_ESCAPED_FILE','AUPARSE_TYPE_FANOTIFY']
 
+import sqlite3
+import shutil
+from git import Repo
 import semanage
 import audit
 import auparse
@@ -23,96 +26,132 @@ import socket
 import os
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
+
 import subprocess
 import re
 import json
 import sys
 import argparse
 
-class Audit2Allow:
-    def __init__(self, options):
-        self.__options = options
+def process_line(rules, l):
+    l = l.rstrip()
+    if l.startswith('#'):
+        comment = l
+        return
 
-    def output(self):
-        return self._output()
-    
-    def _output(self):
-
-        g = policygen.PolicyGenerator()
-
-        g.set_gen_dontaudit(self.__options.dontaudit)
-
-        if self.__options.module:
-            g.set_module_name(self.__options.module)
-
-        # Interface generation
-        if self.__options.refpolicy:
-            ifs, perm_maps = self.__load_interface_info()
-            g.set_gen_refpol(ifs, perm_maps)
-
-        # Explanation
-        if self.__options.verbose:
-            g.set_gen_explain(policygen.SHORT_EXPLANATION)
-        if self.__options.explain_long:
-            g.set_gen_explain(policygen.LONG_EXPLANATION)
-
-        # Requires
-        if self.__options.requires:
-            g.set_gen_requires(True)
-
-        # Generate the policy
-        g.add_access(self.__avs)
-        g.add_role_types(self.__role_types)
-
-        # Output
-        writer = output.ModuleWriter()
-
-        # Module package
-        if self.__options.module_package:
-            self.__output_modulepackage(writer, g)
+    match = re.match('^(\S+)\(([^,\)]+)', line)
+    if match:
+        (iface, arg) = match.groups()
+        print("iface = %s, %s" % (iface, arg))
+        rules.source(arg).add_iface_call(line)
+        
+    match = re.match('^allow\s+(\S+)\s+([^\s:]+):(\S+)\s+(.*);', l)#(?:\{((?:\s\S+){2,})\s\}|(\S+));$', l)
+    if match:
+        (source, target, class_, ops) = match.groups()
+        if ops.startswith('{'):
+            j = ops[2:-2].split(' ')
         else:
-            # File or stdout
-            if self.__options.module:
-                g.set_module_name(self.__options.module)
+            j = [ops]
 
-            if self.__options.output:
-                fd = open(self.__options.output, "a")
+
+        class_rules = rules.source(source).target(target).class_(class_)
+        
+        for op in j:
+            if class_rules.has_op(op):
+                logger.warning("op already in %s/%s/%s/%s", source, target, class_, op)
             else:
-                fd = sys.stdout
-            writer.write(g.get_module(), fd)
+                class_rules.has_op(op, True)
+                
+class NameMixin:
+    @property
+    def name(self):
+        return self._name
 
-    def __load_interface_info(self):
-        # Load interface info file
-        if self.__options.interface_info:
-            fn = self.__options.interface_info
-        else:
-            fn = defaults.interface_info()
-        try:
-            fd = open(fn)
-        except:
-            sys.stderr.write("could not open interface info [%s]\n" % fn)
-            sys.exit(1)
 
-        ifs = interfaces.InterfaceSet()
-        ifs.from_file(fd)
-        fd.close()
+    @name.setter
+    def name(self, new):
+        self._name = new
 
-        # Also load perm maps
-        if self.__options.perm_map:
-            fn = self.__options.perm_map
-        else:
-            fn = defaults.perm_map()
-        try:
-            fd = open(fn)
-        except:
-            sys.stderr.write("could not open perm map [%s]\n" % fn)
-            sys.exit(1)
+       
+        
+class Module(NameMixin):
+    def __init__(self, rules, host, name):
+        self._rules = rules
+        self._host = host
+        self._name = name
 
-        perm_maps = objectmodel.PermMappings()
-        perm_maps.from_file(fd)
+    def load_from_file(file):
+        with file.open('r') as f:
+            for l in f:
+                process_line(self._rules, l)
 
-        return (ifs, perm_maps)
+class ClassRules(NameMixin):
+    def __init__(self, host, source, target, class_):
+        self._name = class_
+        self._rules = {}
+        self._source = source
+        self._target = target
+        self._host = host
+    def has_op(self, op, *args):
+        if args:
+            self._rules[op] = args[0]
+        return op in self._rules
+    
 
+class TargetRules(NameMixin):
+    def __init__(self, host, source, target):
+        self._name = target
+        self._rules = {}
+        self._source = source
+        self._host = host
+
+    def class_(self, class_):
+        if class_ not in self._rules:
+            self._rules[class_] = ClassRules(self._host, self._source, self._name, class_)
+        return self._rules[class_]
+        
+            
+class SourceRules(NameMixin):
+    def __init__(self, host, name):
+        self._name = name
+        self._rules = {}
+        self._host = host
+        self._iface_calls = []
+
+    def target(self, target):
+        if target not in self._rules:
+            self._rules[target] = TargetRules(self._host, self.name, target)
+        return self._rules[target]
+
+    def add_iface_call(self, line):
+        self._iface_calls.append(line)
+
+class HostRules(NameMixin):
+    def __init__(self, name):
+        self._name = name
+        self._rules = {}
+
+    def source(self, source):
+        if source not in self._rules:
+            self._rules[source] = SourceRules(self._name, source)
+        return self._rules[source]
+    
+
+class Rules(NameMixin):
+    def __init__(self, name):
+        self._name = name
+        self._hosts = []
+        self._rules = {}
+
+    def add_host(self, host):
+        self._hosts.append(host)
+        self._rules[host] = HostRules(host)
+
+    def host(self, host):
+        if host not in self._rules:
+            self.add_host(host)
+        return self._rules[host]
+        
 
 logger = logging.getLogger(__name__)
 
@@ -152,77 +191,56 @@ parser.add_argument('--search', '-s', help="Search the auditlog",
                     action="store")
 args = parser.parse_args()
 
-host = args.hostname
+rules = Rules("rules")
 
-x = host.split('.')
-x.reverse()
-mod_prefix = '_'.join(x)
-
-
-rules = {}
-
-generated = Path(args.input_directory)
-comment = ''
-# fix glob
-for tesrc in glob.glob("generated/%s_*.te" % mod_prefix):
-    print(tesrc)
-    with open(tesrc, 'r') as f:
-        for l in f:
-            l = l.rstrip()
-            if l.startswith('#'):
-                comment = l
+git_root = "git"
+repo = {}
+for elem in Path(git_root).iterdir():
+    if elem.is_dir():
+        host = elem.name
+        repo[host] = Repo(str(elem.resolve()))
+        rules.add_host(host)
+        for file in elem.iterdir():
+            if not file.name.endswith('.te'):
                 continue
-            
-            match = re.match('^allow\s+(\S+)\s+([^\s:]+):(\S+)\s+(.*);', l)#(?:\{((?:\s\S+){2,})\s\}|(\S+));$', l)
-            if match:
-                (source, target, class_, ops) = match.groups()
-                if ops.startswith('{'):
-                    j = ops[2:-2].split(' ')
-                else:
-                    j = [ops]
+            module = Module(rules.host(host), host, file.name[0:len(file.name) - 2])
+            module.load_from_file(file)
 
-                if not source in rules:
-                    rules[source] = {}
-                    
-                if not target in rules[source]:
-                    rules[source][target] = {}
 
-                if not class_ in rules[source][target]:
-                    rules[source][target][class_] = {}
+main_temp = TemporaryDirectory(dir="tempdirs")
+print("main_temp = %s" % main_temp.name)
+tempdir = {}
+for host, host_repo in repo.items():
+    x = host.split('.')
+    x.reverse()
+    mod_prefix = '_'.join(x)
 
-                for op in j:
-                    if op in rules[source][target][class_]:
-                        logger.warning("op already in %s/%s/%s/%s", source, target, class_, op)
-                    else:
-                        rules[source][target][class_][op] = True
-                    
-#                rules[source][target].append([class_, j, comment])
-                comment = ''
-            else:
-                pass
-                #print(l, file=sys.stderr)
+    tempdir[host] = main_temp.name + "/" + host
+    os.mkdir(tempdir[host])
+    
+    print("tempdir for %s is %s" % (host, tempdir[host]))
+
 
 # I'm a bit unsure its wise to parse it but it sounded fun
 def mycb(aup, cb_event_type, user_data):
     try:
         r = _mycb(aup, cb_event_type, user_data)
     except:
-        print("%s", sys.exc_info()[1])
-        sys.exit(1)
+        print("%s" % sys.exc_info()[1])
+        import traceback
+        traceback.print_tb(sys.exc_info()[2])
+
 
 def _mycb(aup, cb_event_type, user_data):
     if cb_event_type == auparse.AUPARSE_CB_EVENT_READY:
         if aup.first_record() < 0:
             return
 
-        #print("num_records = %d" % aup.get_num_records())
-
-        first_event = True
         lines = []
         while True:
             event = aup.get_timestamp()
             if not user_data['cur_event'] or user_data['cur_event']['serial'] != event.serial:
-                user_data['cur_event'] = dict(sec=event.sec, host=event.host, milli=event.milli, serial=event.serial)
+                user_data['cur_event'] = dict(sec=event.sec, host=event.host, milli=event.milli, serial=event.serial, scontext=None)
                 lines.append("----")
                 dt = datetime.fromtimestamp(event.sec)
                 lines.append("time->%s" % dt)
@@ -246,6 +264,8 @@ def _mycb(aup, cb_event_type, user_data):
                         elif f == "seperms":
                             message = message + "  { " + v + " } for "
                             procvar = True
+                        elif f == "scontext":
+                            user_data['cur_event']['scontext'] = v
 
                     if not procvar:
                         vars = vars + " " + f + "=" + v
@@ -256,19 +276,13 @@ def _mycb(aup, cb_event_type, user_data):
             lines.append(message)
             if not aup.next_record(): break
 
-        user_data['proc'].stdin.write(bytes('\n'.join(lines) + '\n', encoding='utf-8'))
+        if event.host not in user_data['log']:
+            user_data['log'][event.host] = []
 
+        user_data['log'][event.host].extend(lines)
 
-with TemporaryDirectory(None, 'mods-%s-' % mod_prefix) as tempdir:
-    out = Path(tempdir)
-    if not out.exists():
-        print("making directory %s" % out)
-        out.mkdir()
-        
-    os.chdir(str(out))
-
+try:
     lines = None
-    #if len(sys.argv) == 1:
     ausearch_out = None
     audit_lines = []
 
@@ -280,13 +294,15 @@ with TemporaryDirectory(None, 'mods-%s-' % mod_prefix) as tempdir:
 
     assert ausearch_proc.stdout
 
-    audit2allowproc = subprocess.Popen(['audit2allow', '-v'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-#    audit2allowproc = subprocess.Popen(['/bin/bash', '/home/user/j/jade/src/selinux-misc/python/me'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    cmd = ['audit2allow']
+    if args.refpolicy:
+        cmd.append('-R')
+    
     ausearch_output = b""
     all_allow_out = b""
 
     aup = auparse.AuParser(auparse.AUSOURCE_FEED)
-    user_data = dict(proc=audit2allowproc, cur_event=None)
+    user_data = dict(cur_event=None, log={})
     aup.add_callback(mycb, user_data)
     
     while ausearch_proc.returncode is None:
@@ -299,115 +315,86 @@ with TemporaryDirectory(None, 'mods-%s-' % mod_prefix) as tempdir:
         result = aup.feed(stdout)
 
     aup.flush_feed()
-
-    (allow_out, allow_err) = audit2allowproc.communicate()
-    print(allow_out)
-    
     aup = None
 
-    src = 'audit2allow'
-    allow = allow_out.decode('utf-8')
-    
-    lines = allow.split('\n')
-    #else:
-#    with open(sys.argv[1], 'r'):
-
-    source = None
-    for line in lines:
-#        if line == '#!!!! This avc is allowed in the current policy':
-#            lines.pop(0)
-#            continue
-    
-        print(line)
-        match = re.match('^#=+\s(\S+)\s=', line)
-        if match:
-            source = match.group(1)
-            continue
-        match = re.match('^allow\s(\S+)\s([\S^:]+):(\S+)\s(?:\{((?:\s\S+){2,})\s\}|(\S+));$', line)
-        if match:
-            (source, target, class_, j1, j2) = match.groups()
-            j = None
-            if j1:
-                j = j1.strip().split(' ')
-            else:
-                j = [j2]
-
-            if not source in rules:
-                rules[source] = {}
-
-                    
-            if not target in rules[source]:
-                rules[source][target] = {}
-
-            if not class_ in rules[source][target]:
-                rules[source][target][class_] = {}
-
-            for op in j:
-                if op in rules[source][target][class_]:
-                    logger.warning("op already in %s/%s/%s/%s", source, target, class_, op)
-                else:
-                    rules[source][target][class_][op] = True
-            
-
-    logger.info("initializing template with laoder dir %s", app_root)
     env = Environment(
         loader=FileSystemLoader(app_root),
         trim_blocks=True,
         lstrip_blocks=True,
         autoescape=False,
-)
+        )
 
-    for source, sdict in rules.items():
-        def setup_policygen(name):
-            args.module = name
-            a = Audit2Allow(args)
-            
-            a.output()
-            return a
+    for host in user_data['log']:
+        x = host.split('.')
+        x.reverse()
+        mod_prefix = '_'.join(x)
+
+        print("processing %s" % host)
+        audit2allowproc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        (allow_out, allow_err) = audit2allowproc.communicate(bytes('\n'.join(user_data['log'][host]) + '\n', encoding='utf-8'))
+        
+        print(allow_out)
     
-        name = source[0:-2]
-        module_name = '%s_%s' % (mod_prefix, name)
-#        a = setup_policygen(module_name)
+        allow = allow_out.decode('utf-8')
+        lines = allow.split('\n')
 
-        t = env.get_template('module.jinja2')
-        classes = {}
-        rules = []
-        types = { source: True }
-        for target, tdict in sdict.items():
-            if not (target in types or target in ('self')):
-                types[target] = True
-            
-            for class_ in tdict.keys():
-                ops = tdict[class_].keys()
-                rules.append('allow %s %s:%s { %s };' % (source, target, class_, ' '.join(ops)))
-                if not class_ in classes:
-                    classes[class_] = {}
-                for op in ops:
-                    classes[class_][op] = True
+        source = None
+        for line in lines:
+            try:
+                process_line(rules.host(host), line)
+            except Exception  as ex:
+                raise ex
 
-
-        fname = '%s.te' % module_name;
-        with open(fname, 'w') as f:
-            print(t.render(module_name=module_name,
-                   classes=classes,
-                   rules=rules,
-                       types=types), file=f)
-
-        mod_fname = '%s.mod' % module_name
-        r = subprocess.run(['checkmodule', '-o', mod_fname, '-m', fname], stdout=subprocess.PIPE)
-        if r.returncode:
-#            print(r.stderr.decode('utf-8'), file=sys.stderr)
-            exit(1)
-
-        pp_out = '%s.pp' % module_name
-        r = subprocess.run(['semodule_package', '-o', pp_out, '-m', mod_fname], stdout=subprocess.PIPE)
-        if r.returncode:
-#            print(r.stderr.decode('utf-8'), file=sys.stderr)
-            exit(1)
-
+        for source, sourcerules in rules.host(host)._rules.items():
+            name = source[0:-2]
+            module_name = '%s_%s' % (mod_prefix, name)
+            t = env.get_template('module.jinja2')
+            classes = {}
+            rulesary = []
+            types = { source: True }
+            for target, targetrules in sourcerules._rules.items():
+                if not (target in types or target in ('self')):
+                    types[target] = True
+                
+                for class_ in targetrules._rules.keys():
+                    ops = targetrules._rules[class_]._rules.keys()
+                    rulesary.append('allow %s %s:%s { %s };' % (source, target, class_, ' '.join(ops)))
+                    if not class_ in classes:
+                        classes[class_] = {}
+                    for op in ops:
+                        classes[class_][op] = True
+                        
+            rulesary.extend(sourcerules._iface_calls)
+            fname = tempdir[host] + '/%s.te' % module_name;
+            print("writing %s" % fname)
+            with open(fname, 'w') as f:
+                print(t.render(module_name=module_name,
+                       classes=classes,
+                       rules=rulesary,
+                           types=types), file=f)
+    
+#            mod_fname = tempdir[host] + '/%s.mod' % module_name
+#            r = subprocess.run(['checkmodule', '-o', mod_fname, '-m', fname], stdout=subprocess.PIPE)
+#            if r.returncode:
+#    #            print(r.stderr.decode('utf-8'), file=sys.stderr)
+#                print(fname)
+#                exit(1)
+#    
+#            pp_out = tempdir[host] + '/%s.pp' % module_name
+#            r = subprocess.run(['semodule_package', '-o', pp_out, '-m', mod_fname], stdout=subprocess.PIPE)
+#            if r.returncode:
+#    #            print(r.stderr.decode('utf-8'), file=sys.stderr)
+#                exit(1)
+#    
     print(tempdir)
-    while True:
-        time.sleep(5)
+except Exception as ex:
+    raise ex
+finally:
+    output_dir = "output"
+    shutil.rmtree(output_dir)
+    os.mkdir(output_dir)
+    for host, dir in tempdir.items():
+        shutil.copytree(dir, "%s/%s" % (output_dir, host))
     
 #json.dump(rules, fp=sys.stdout, indent=4)
 os.chdir(app_root)
