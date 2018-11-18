@@ -29,210 +29,6 @@ import json
 import sys
 import argparse
 
-class AuditParser:
-    """Parser for audit messages.
-
-    This class parses audit messages and stores them according to their message
-    type. This is not a general purpose audit message parser - it only extracts
-    selinux related messages.
-
-    Each audit messages are stored in one of four lists:
-       avc_msgs - avc denial or granted messages. Messages are stored in
-          AVCMessage objects.
-       comput_sid_messages - invalid sid messages. Messages are stored in
-          ComputSidMessage objects.
-       invalid_msgs - selinux related messages that are not valid. Messages
-          are stored in InvalidMessageObjects.
-       policy_load_messages - policy load messages. Messages are stored in
-          PolicyLoadMessage objects.
-
-    These lists will be reset when a policy load message is seen if
-    AuditParser.last_load_only is set to true. It is assumed that messages
-    are fed to the parser in chronological order - time stamps are not
-    parsed.
-    """
-    def __init__(self, last_load_only=False):
-        self.__initialize()
-        self.last_load_only = last_load_only
-
-    def __initialize(self):
-        self.avc_msgs = []
-        self.compute_sid_msgs = []
-        self.invalid_msgs = []
-        self.policy_load_msgs = []
-        self.path_msgs = []
-        self.by_header = { }
-        self.check_input_file = False
-                
-    # Low-level parsing function - tries to determine if this audit
-    # message is an SELinux related message and then parses it into
-    # the appropriate AuditMessage subclass. This function deliberately
-    # does not impose policy (e.g., on policy load message) or store
-    # messages to make as simple and reusable as possible.
-    #
-    # Return values:
-    #   None - no recognized audit message found in this line
-    #
-    #   InvalidMessage - a recognized but invalid message was found.
-    #
-    #   AuditMessage (or subclass) - object representing a parsed
-    #      and valid audit message.
-    def __parse_line(self, line):
-        # strip("\x1c\x1d\x1e\x85") is only needed for python2
-        # since str.split() in python3 already does this
-        rec = [x.strip("\x1c\x1d\x1e\x85") for x in line.split()]
-        for i in rec:
-            found = False
-            if i == "avc:" or i == "message=avc:" or i == "msg='avc:":
-                msg = AVCMessage(line)
-                found = True
-            elif i == "security_compute_sid:":
-                msg = ComputeSidMessage(line)
-                found = True
-            elif i == "type=MAC_POLICY_LOAD" or i == "type=1403":
-                msg = PolicyLoadMessage(line)
-                found = True
-            elif i == "type=AVC_PATH":
-                msg = PathMessage(line)
-                found = True
-            elif i == "type=DAEMON_START":
-                msg = DaemonStartMessage(list)
-                found = True
-                
-            if found:
-                self.check_input_file = True
-                try:
-                    msg.from_split_string(rec)
-                except ValueError:
-                    msg = InvalidMessage(line)
-                return msg
-        return None
-
-    # Higher-level parse function - take a line, parse it into an
-    # AuditMessage object, and store it in the appropriate list.
-    # This function will optionally reset all of the lists when
-    # it sees a load policy message depending on the value of
-    # self.last_load_only.
-    def __parse(self, line):
-        msg = self.__parse_line(line)
-        if msg is None:
-            return
-
-        # Append to the correct list
-        if isinstance(msg, PolicyLoadMessage):
-            if self.last_load_only:
-                self.__initialize()
-        elif isinstance(msg, DaemonStartMessage):
-            # We initialize every time the auditd is started. This
-            # is less than ideal, but unfortunately it is the only
-            # way to catch reboots since the initial policy load
-            # by init is not stored in the audit log.
-            if msg.auditd and self.last_load_only:
-                self.__initialize()
-            self.policy_load_msgs.append(msg)
-        elif isinstance(msg, AVCMessage):
-            self.avc_msgs.append(msg)
-        elif isinstance(msg, ComputeSidMessage):
-            self.compute_sid_msgs.append(msg)
-        elif isinstance(msg, InvalidMessage):
-            self.invalid_msgs.append(msg)
-        elif isinstance(msg, PathMessage):
-            self.path_msgs.append(msg)
-
-        # Group by audit header
-        if msg.header != "":
-            if msg.header in self.by_header:
-                self.by_header[msg.header].append(msg)
-            else:
-                self.by_header[msg.header] = [msg]
-            
-
-    # Post processing will add additional information from AVC messages
-    # from related messages - only works on messages generated by
-    # the audit system.
-    def __post_process(self):
-        for value in self.by_header.values():
-            avc = []
-            path = None
-            for msg in value:
-                if isinstance(msg, PathMessage):
-                    path = msg
-                elif isinstance(msg, AVCMessage):
-                    avc.append(msg)
-            if len(avc) > 0 and path:
-                for a in avc:
-                    a.path = path.path
-
-    def parse_file(self, input):
-        """Parse the contents of a file object. This method can be called
-        multiple times (along with parse_string)."""
-        line = input.readline()
-        while line:
-            self.__parse(line)
-            line = input.readline()
-        if not self.check_input_file:
-            sys.stderr.write("Nothing to do\n")
-            sys.exit(0)
-        self.__post_process()
-
-    def parse_string(self, input):
-        """Parse a string containing audit messages - messages should
-        be separated by new lines. This method can be called multiple
-        times (along with parse_file)."""
-        lines = input.split('\n')
-        for l in lines:
-            self.__parse(l)
-        self.__post_process()
-
-    def to_role(self, role_filter=None):
-        """Return RoleAllowSet statements matching the specified filter
-
-        Filter out types that match the filer, or all roles
-
-        Params:
-           role_filter - [optional] Filter object used to filter the
-              output.
-        Returns:
-           Access vector set representing the denied access in the
-           audit logs parsed by this object.
-        """
-        role_types = access.RoleTypeSet()
-        for cs in self.compute_sid_msgs:
-            if not role_filter or role_filter.filter(cs):
-                role_types.add(cs.invalid_context.role, cs.invalid_context.type)
-        
-        return role_types
-
-    def to_access(self, avc_filter=None, only_denials=True):
-        """Convert the audit logs access into a an access vector set.
-
-        Convert the audit logs into an access vector set, optionally
-        filtering the restults with the passed in filter object.
-
-        Filter objects are object instances with a .filter method
-        that takes and access vector and returns True if the message
-        should be included in the final output and False otherwise.
-
-        Params:
-           avc_filter - [optional] Filter object used to filter the
-              output.
-        Returns:
-           Access vector set representing the denied access in the
-           audit logs parsed by this object.
-        """
-        av_set = access.AccessVectorSet()
-        for avc in self.avc_msgs:
-            if avc.denial != True and only_denials:
-                continue
-            if avc_filter:
-                if avc_filter.filter(avc):
-                    av_set.add(avc.scontext.type, avc.tcontext.type, avc.tclass,
-                               avc.accesses, avc, avc_type=avc.type, data=avc.data)
-            else:
-                av_set.add(avc.scontext.type, avc.tcontext.type, avc.tclass,
-                           avc.accesses, avc, avc_type=avc.type, data=avc.data)
-        return av_set
-
 class Audit2Allow:
     def __init__(self, options):
         self.__options = options
@@ -510,7 +306,7 @@ with TemporaryDirectory(None, 'mods-%s-' % mod_prefix) as tempdir:
     aup = None
 
     src = 'audit2allow'
-    allow = all_allow_out.decode('utf-8')
+    allow = allow_out.decode('utf-8')
     
     lines = allow.split('\n')
     #else:
@@ -571,7 +367,7 @@ with TemporaryDirectory(None, 'mods-%s-' % mod_prefix) as tempdir:
     
         name = source[0:-2]
         module_name = '%s_%s' % (mod_prefix, name)
-        a = setup_policygen(module_name)
+#        a = setup_policygen(module_name)
 
         t = env.get_template('module.jinja2')
         classes = {}
