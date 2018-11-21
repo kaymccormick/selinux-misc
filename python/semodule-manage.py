@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.7
+#!/usr/bin/python3
 ## File: semodule-manage.py
 ## Author: Kay McCormick
 ##
@@ -32,6 +32,18 @@ import re
 import json
 import sys
 import argparse
+import logging.config
+
+logging_config = dict(version=1,
+                      loggers=dict(root=dict(level='DEBUG', handlers=['console'])),
+                      formatters=dict(generic=dict(format='%(asctime)s %(levelname)-5.5s [%(name)s:%(lineno)s][%(threadName)s] %(message)s')),
+                      handlers=dict(console={'class': 'logging.StreamHandler',
+                                             'level': 'DEBUG',
+                                             'stream': 'ext://sys.stdout',
+                                             'formatter': 'generic'}),
+                      
+                      )
+logging.config.dictConfig(logging_config)
 
 def process_line(rules, l):
     l = l.rstrip()
@@ -39,11 +51,12 @@ def process_line(rules, l):
         comment = l
         return
 
-    match = re.match('^(\S+)\(([^,\)]+)', line)
+    match = re.match('^(\S+)\(([^,\)]+)', l)
     if match:
         (iface, arg) = match.groups()
-        print("iface = %s, %s" % (iface, arg))
-        rules.source(arg).add_iface_call(line)
+        if iface != "policy_module":
+            logger.warning("iface = %s, %s" % (iface, arg))
+            rules.source(arg).add_iface_call(l)
         
     match = re.match('^allow\s+(\S+)\s+([^\s:]+):(\S+)\s+(.*);', l)#(?:\{((?:\s\S+){2,})\s\}|(\S+));$', l)
     if match:
@@ -73,6 +86,22 @@ class NameMixin:
         self._name = new
 
        
+class Host(NameMixin):
+    def __init__(self, name, fqdn):
+        self._name = name
+        self._fqdn = fqdn
+
+    @property
+    def fqdn(self):
+        return self._fqdn
+
+    @fqdn.setter
+    def fqdn(self, new):
+        self._fqdn = new
+
+    def __str__(self):
+        return self.fqdn
+        
         
 class Module(NameMixin):
     def __init__(self, rules, host, name):
@@ -80,7 +109,7 @@ class Module(NameMixin):
         self._host = host
         self._name = name
 
-    def load_from_file(file):
+    def load_from_file(self, file):
         with file.open('r') as f:
             for l in f:
                 process_line(self._rules, l)
@@ -116,7 +145,7 @@ class SourceRules(NameMixin):
         self._name = name
         self._rules = {}
         self._host = host
-        self._iface_calls = []
+        self._iface_calls = {}
 
     def target(self, target):
         if target not in self._rules:
@@ -124,7 +153,13 @@ class SourceRules(NameMixin):
         return self._rules[target]
 
     def add_iface_call(self, line):
-        self._iface_calls.append(line)
+        match = re.match('^(\S+)\(([^,\)]+)(.*)\)$', line)
+        assert match
+        (iface, arg1, rest) = match.groups()
+        if iface not in self._iface_calls:
+            self._iface_calls[iface] = {}
+        if rest not in self._iface_calls[iface]:
+            self._iface_calls[iface][rest] = True
 
 class HostRules(NameMixin):
     def __init__(self, name):
@@ -155,6 +190,8 @@ class Rules(NameMixin):
 
 logger = logging.getLogger(__name__)
 
+hostmap = dict(netra='netra.heptet.us')
+
 ftypemap = {}
 for ftype in ftypes:
     if hasattr(auparse, ftype):
@@ -167,6 +204,7 @@ app_root = str(cmd.parent.absolute())
 host = socket.gethostname()
 
 parser = argparse.ArgumentParser(description="Manage SELinux modules")
+parser.add_argument('--scontext', action='store', dest='scontext', help='Limit scontext to comma separated list')
 # Audit2Allow argument
 parser.add_argument("-r", "--requires", action="store_true", dest="requires", default=False,
                           help="generate require statements for rules")
@@ -276,10 +314,14 @@ def _mycb(aup, cb_event_type, user_data):
             lines.append(message)
             if not aup.next_record(): break
 
-        if event.host not in user_data['log']:
-            user_data['log'][event.host] = []
+        if event.host in hostmap:
+            mapped_host = hostmap[event.host]
+        else:
+            mapped_host = event.host
+        if mapped_host not in user_data['log']:
+            user_data['log'][mapped_host] = []
 
-        user_data['log'][event.host].extend(lines)
+        user_data['log'][mapped_host].extend(lines)
 
 try:
     lines = None
@@ -297,6 +339,8 @@ try:
     cmd = ['audit2allow']
     if args.refpolicy:
         cmd.append('-R')
+    cmd.extend(['--interface-info', repo[host].working_tree_dir + '/interface_info',
+                '--perm-map', repo[host].working_tree_dir + '/perm_map'])
     
     ausearch_output = b""
     all_allow_out = b""
@@ -324,6 +368,7 @@ try:
         autoescape=False,
         )
 
+    print(user_data['log'].keys(), sep="\t")
     for host in user_data['log']:
         x = host.split('.')
         x.reverse()
@@ -352,26 +397,36 @@ try:
             classes = {}
             rulesary = []
             types = { source: True }
-            for target, targetrules in sourcerules._rules.items():
+            for target in sorted(sourcerules._rules.keys()):
+                targetrules = sourcerules._rules[target]
                 if not (target in types or target in ('self')):
                     types[target] = True
                 
-                for class_ in targetrules._rules.keys():
+                for class_ in sorted(targetrules._rules.keys()):
                     ops = targetrules._rules[class_]._rules.keys()
-                    rulesary.append('allow %s %s:%s { %s };' % (source, target, class_, ' '.join(ops)))
+                    rulesary.append('allow %s %s:%s { %s };' % (source, target, class_, ' '.join(sorted(ops))))
                     if not class_ in classes:
                         classes[class_] = {}
                     for op in ops:
                         classes[class_][op] = True
-                        
-            rulesary.extend(sourcerules._iface_calls)
+
+            for iface in sorted(sourcerules._iface_calls.keys()):
+                calls = sourcerules._iface_calls[iface]
+                for rest in sorted(calls.keys()):
+                    rulesary.append("%s(%s%s)" % (iface, source, rest))
+                
             fname = tempdir[host] + '/%s.te' % module_name;
             print("writing %s" % fname)
+            classes2 = {}
+            for k, v in classes.items():
+                classes2[k] = list(sorted(v.keys()))
+
             with open(fname, 'w') as f:
                 print(t.render(module_name=module_name,
-                       classes=classes,
+                               sclasses=sorted(classes2.keys()),
+                       classes=classes2,
                        rules=rulesary,
-                           types=types), file=f)
+                               types=sorted(types.keys())), file=f)
     
 #            mod_fname = tempdir[host] + '/%s.mod' % module_name
 #            r = subprocess.run(['checkmodule', '-o', mod_fname, '-m', fname], stdout=subprocess.PIPE)
