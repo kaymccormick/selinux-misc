@@ -1,988 +1,865 @@
 {
-  "dir_file_class_set": [
-    "dir",
-    "file_class_set"
-  ],
-  "file_class_set": [
-    "devfile_class_set",
-    "notdevfile_class_set"
-  ],
-  "notdevfile_class_set": [
-    "fifo_file",
-    "file",
-    "lnk_file",
-    "sock_file"
-  ],
-  "devfile_class_set": [
-    "blk_file",
-    "chr_file"
-  ],
-  "socket_class_set": [
-    "tcp_socket",
-    "udp_socket",
-    "rawip_socket",
-    "netlink_socket",
-    "packet_socket",
-    "unix_stream_socket",
-    "unix_dgram_socket",
-    "appletalk_socket",
-    "netlink_route_socket",
-    "netlink_firewall_socket",
-    "netlink_tcpdiag_socket",
-    "netlink_nflog_socket",
-    "netlink_xfrm_socket",
-    "netlink_selinux_socket",
-    "netlink_audit_socket",
-    "netlink_ip6fw_socket",
-    "netlink_dnrt_socket",
-    "netlink_kobject_uevent_socket",
-    "tun_socket",
-    "netlink_iscsi_socket",
-    "netlink_fib_lookup_socket",
-    "netlink_connector_socket",
-    "netlink_netfilter_socket",
-    "netlink_generic_socket",
-    "netlink_scsitransport_socket",
-    "netlink_rdma_socket",
-    "netlink_crypto_socket",
-    "sctp_socket",
-    "icmp_socket",
-    "ax25_socket",
-    "ipx_socket",
-    "netrom_socket",
-    "atmpvc_socket",
-    "x25_socket",
-    "rose_socket",
-    "decnet_socket",
-    "atmsvc_socket",
-    "rds_socket",
-    "irda_socket",
-    "pppox_socket",
-    "llc_socket",
-    "can_socket",
-    "tipc_socket",
-    "bluetooth_socket",
-    "iucv_socket",
-    "rxrpc_socket",
-    "isdn_socket",
-    "phonet_socket",
-    "ieee802154_socket",
-    "caif_socket",
-    "alg_socket",
-    "nfc_socket",
-    "vsock_socket",
-    "kcm_socket",
-    "qipcrtr_socket",
-    "smc_socket"
-  ],
-  "dgram_socket_class_set": [
-    "udp_socket",
-    "unix_dgram_socket"
-  ],
-  "stream_socket_class_set": [
-    "tcp_socket",
-    "unix_stream_socket"
-  ],
-  "unpriv_socket_class_set": [
-    "tcp_socket",
-    "udp_socket",
-    "unix_stream_socket",
-    "unix_dgram_socket"
-  ],
-  "mount_fs_perms": [
-    "mount",
-    "remount",
-    "unmount",
-    "getattr"
-  ],
-  "rw_socket_perms": [
-    "ioctl",
-    "read",
-    "getattr",
-    "write",
-    "setattr",
-    "append",
-    "bind",
-    "connect",
-    "getopt",
-    "setopt",
-    "shutdown"
-  ],
-  "create_socket_perms": [
-    "create",
-    "ioctl",
-    "read",
-    "getattr",
-    "write",
-    "setattr",
-    "append",
-    "bind",
-    "connect",
-    "getopt",
-    "setopt",
-    "shutdown"
-  ],
-  "rw_stream_socket_perms": [
-    "ioctl",
-    "read",
-    "getattr",
-    "write",
-    "setattr",
-    "append",
-    "bind",
-    "connect",
-    "getopt",
-    "setopt",
-    "shutdown",
-    "listen",
-    "accept"
-  ],
-  "create_stream_socket_perms": [
-    "create",
-    "ioctl",
-    "read",
-    "getattr",
-    "write",
-    "setattr",
-    "append",
-    "bind",
-    "connect",
-    "getopt",
-    "setopt",
-    "shutdown",
-    "listen",
-    "accept"
-  ],
-  "connected_socket_perms": [
-    "create",
-    "ioctl",
-    "read",
-    "getattr",
-    "write",
-    "setattr",
-    "append",
-    "bind",
-    "getopt",
-    "setopt",
-    "shutdown"
-  ],
-  "connected_stream_socket_perms": [
-    "create",
-    "ioctl",
-    "read",
-    "getattr",
-    "write",
-    "setattr",
-    "append",
-    "bind",
-    "getopt",
-    "setopt",
-    "shutdown",
-    "listen",
-    "accept"
-  ],
-  "create_netlink_socket_perms": [
-    "create",
-    "ioctl",
-    "read",
-    "getattr",
-    "write",
-    "setattr",
-    "append",
-    "bind",
-    "connect",
-    "getopt",
-    "setopt",
-    "shutdown",
-    "nlmsg_read",
-    "nlmsg_write"
-  ],
-  "rw_netlink_socket_perms": [
-    "create",
-    "ioctl",
-    "read",
-    "getattr",
-    "write",
-    "setattr",
-    "append",
-    "bind",
-    "connect",
-    "getopt",
-    "setopt",
-    "shutdown",
-    "nlmsg_read",
-    "nlmsg_write"
-  ],
-  "r_netlink_socket_perms": [
-    "create",
-    "ioctl",
-    "read",
-    "getattr",
-    "write",
-    "setattr",
-    "append",
-    "bind",
-    "connect",
-    "getopt",
-    "setopt",
-    "shutdown",
-    "nlmsg_read"
-  ],
-  "signal_perms": [
-    "sigchld",
-    "sigkill",
-    "sigstop",
-    "signull",
-    "signal"
-  ],
-  "packet_perms": [
-    "tcp_recv",
-    "tcp_send",
-    "udp_recv",
-    "udp_send",
-    "rawip_recv",
-    "rawip_send"
-  ],
-  "r_sem_perms": [
-    "associate",
-    "getattr",
-    "read",
-    "unix_read"
-  ],
-  "rw_sem_perms": [
-    "associate",
-    "getattr",
-    "read",
-    "unix_read",
-    "unix_write",
-    "write"
-  ],
-  "create_sem_perms": [
-    "create",
-    "destroy",
-    "associate",
-    "getattr",
-    "read",
-    "unix_read",
-    "unix_write",
-    "write",
-    "setattr"
-  ],
-  "r_msgq_perms": [
-    "associate",
-    "getattr",
-    "read",
-    "unix_read"
-  ],
-  "rw_msgq_perms": [
-    "enqueue",
-    "associate",
-    "getattr",
-    "read",
-    "unix_read",
-    "unix_write",
-    "write"
-  ],
-  "create_msgq_perms": [
-    "create",
-    "destroy",
-    "enqueue",
-    "associate",
-    "getattr",
-    "read",
-    "unix_read",
-    "unix_write",
-    "write",
-    "setattr"
-  ],
-  "r_shm_perms": [
-    "associate",
-    "getattr",
-    "read",
-    "unix_read"
-  ],
-  "rw_shm_perms": [
-    "lock",
-    "associate",
-    "getattr",
-    "read",
-    "unix_read",
-    "unix_write",
-    "write"
-  ],
-  "create_shm_perms": [
-    "create",
-    "destroy",
-    "lock",
-    "associate",
-    "getattr",
-    "read",
-    "unix_read",
-    "unix_write",
-    "write",
-    "setattr"
-  ],
-  "getattr_dir_perms": [
-    "getattr"
-  ],
-  "setattr_dir_perms": [
-    "setattr"
-  ],
-  "search_dir_perms": [
-    "getattr",
-    "search",
-    "open"
-  ],
-  "list_dir_perms": [
-    "getattr",
-    "search",
-    "open",
-    "read",
-    "lock",
-    "ioctl"
-  ],
-  "add_entry_dir_perms": [
-    "getattr",
-    "search",
-    "open",
-    "lock",
-    "ioctl",
-    "write",
-    "add_name"
-  ],
-  "del_entry_dir_perms": [
-    "getattr",
-    "search",
-    "open",
-    "lock",
-    "ioctl",
-    "write",
-    "remove_name"
-  ],
-  "rw_dir_perms": [
-    "open",
-    "read",
-    "getattr",
-    "lock",
-    "search",
-    "ioctl",
-    "add_name",
-    "remove_name",
-    "write"
-  ],
-  "create_dir_perms": [
-    "getattr",
-    "create"
-  ],
-  "rename_dir_perms": [
-    "getattr",
-    "rename"
-  ],
-  "delete_dir_perms": [
-    "getattr",
-    "rmdir"
-  ],
-  "manage_dir_perms": [
-    "create",
-    "open",
-    "getattr",
-    "setattr",
-    "read",
-    "write",
-    "link",
-    "unlink",
-    "rename",
-    "search",
-    "add_name",
-    "remove_name",
-    "reparent",
-    "rmdir",
-    "lock",
-    "ioctl"
-  ],
-  "relabelfrom_dir_perms": [
-    "getattr",
-    "relabelfrom"
-  ],
-  "relabelto_dir_perms": [
-    "getattr",
-    "relabelto"
-  ],
-  "relabel_dir_perms": [
-    "getattr",
-    "relabelfrom",
-    "relabelto"
-  ],
-  "getattr_file_perms": [
-    "getattr"
-  ],
-  "setattr_file_perms": [
-    "setattr"
-  ],
-  "read_file_perms": [
-    "getattr",
-    "open",
-    "read",
-    "lock",
-    "ioctl"
-  ],
-  "mmap_file_perms": [
-    "getattr",
-    "open",
-    "map",
-    "read",
-    "execute",
-    "ioctl"
-  ],
-  "mmap_read_inherited_file_perms": [
-    "getattr",
-    "map",
-    "read",
-    "ioctl"
-  ],
-  "mmap_read_file_perms": [
-    "getattr",
-    "open",
-    "map",
-    "read",
-    "ioctl"
-  ],
-  "mmap_exec_inherited_file_perms": [
-    "getattr",
-    "map",
-    "read",
-    "execute",
-    "ioctl"
-  ],
-  "mmap_exec_file_perms": [
-    "getattr",
-    "open",
-    "map",
-    "read",
-    "execute",
-    "ioctl"
-  ],
-  "exec_file_perms": [
-    "getattr",
-    "open",
-    "map",
-    "read",
-    "execute",
-    "ioctl",
-    "execute_no_trans"
-  ],
-  "append_file_perms": [
-    "getattr",
-    "open",
-    "append",
-    "lock",
-    "ioctl"
-  ],
-  "write_inherited_file_perms": [
-    "getattr",
-    "write",
-    "append",
-    "lock",
-    "ioctl"
-  ],
-  "write_file_perms": [
-    "getattr",
-    "open",
-    "write",
-    "append",
-    "lock",
-    "ioctl"
-  ],
-  "rw_inherited_file_perms": [
-    "getattr",
-    "read",
-    "write",
-    "append",
-    "ioctl",
-    "lock"
-  ],
-  "rw_file_perms": [
-    "open",
-    "getattr",
-    "read",
-    "write",
-    "append",
-    "ioctl",
-    "lock"
-  ],
-  "mmap_rw_inherited_file_perms": [
-    "getattr",
-    "map",
-    "read",
-    "write",
-    "ioctl"
-  ],
-  "mmap_rw_file_perms": [
-    "getattr",
-    "open",
-    "map",
-    "read",
-    "write",
-    "ioctl"
-  ],
-  "create_file_perms": [
-    "getattr",
-    "create",
-    "open"
-  ],
-  "rename_file_perms": [
-    "getattr",
-    "rename"
-  ],
-  "delete_file_perms": [
-    "getattr",
-    "unlink"
-  ],
-  "manage_file_perms": [
-    "create",
-    "open",
-    "getattr",
-    "setattr",
-    "read",
-    "write",
-    "append",
-    "rename",
-    "link",
-    "unlink",
-    "ioctl",
-    "lock"
-  ],
-  "relabelfrom_file_perms": [
-    "getattr",
-    "relabelfrom"
-  ],
-  "relabelto_file_perms": [
-    "getattr",
-    "relabelto"
-  ],
-  "relabel_file_perms": [
-    "getattr",
-    "relabelfrom",
-    "relabelto"
-  ],
-  "getattr_lnk_file_perms": [
-    "getattr"
-  ],
-  "setattr_lnk_file_perms": [
-    "setattr"
-  ],
-  "read_lnk_file_perms": [
-    "getattr",
-    "read"
-  ],
-  "append_lnk_file_perms": [
-    "getattr",
-    "append",
-    "lock",
-    "ioctl"
-  ],
-  "write_lnk_file_perms": [
-    "getattr",
-    "append",
-    "write",
-    "lock",
-    "ioctl"
-  ],
-  "rw_lnk_file_perms": [
-    "getattr",
-    "read",
-    "write",
-    "lock",
-    "ioctl"
-  ],
-  "create_lnk_file_perms": [
-    "create",
-    "getattr"
-  ],
-  "rename_lnk_file_perms": [
-    "getattr",
-    "rename"
-  ],
-  "delete_lnk_file_perms": [
-    "getattr",
-    "unlink"
-  ],
-  "manage_lnk_file_perms": [
-    "create",
-    "read",
-    "write",
-    "getattr",
-    "setattr",
-    "link",
-    "unlink",
-    "rename",
-    "ioctl",
-    "lock"
-  ],
-  "relabelfrom_lnk_file_perms": [
-    "getattr",
-    "relabelfrom"
-  ],
-  "relabelto_lnk_file_perms": [
-    "getattr",
-    "relabelto"
-  ],
-  "relabel_lnk_file_perms": [
-    "getattr",
-    "relabelfrom",
-    "relabelto"
-  ],
-  "getattr_fifo_file_perms": [
-    "getattr"
-  ],
-  "setattr_fifo_file_perms": [
-    "setattr"
-  ],
-  "read_fifo_file_perms": [
-    "getattr",
-    "open",
-    "read",
-    "lock",
-    "ioctl"
-  ],
-  "append_fifo_file_perms": [
-    "getattr",
-    "open",
-    "append",
-    "lock",
-    "ioctl"
-  ],
-  "write_fifo_file_perms": [
-    "getattr",
-    "open",
-    "write",
-    "append",
-    "lock",
-    "ioctl"
-  ],
-  "rw_inherited_fifo_file_perms": [
-    "getattr",
-    "read",
-    "write",
-    "append",
-    "ioctl",
-    "lock"
-  ],
-  "rw_fifo_file_perms": [
-    "open",
-    "getattr",
-    "read",
-    "write",
-    "append",
-    "ioctl",
-    "lock"
-  ],
-  "create_fifo_file_perms": [
-    "getattr",
-    "create",
-    "open"
-  ],
-  "rename_fifo_file_perms": [
-    "getattr",
-    "rename"
-  ],
-  "delete_fifo_file_perms": [
-    "getattr",
-    "unlink"
-  ],
-  "manage_fifo_file_perms": [
-    "create",
-    "open",
-    "getattr",
-    "setattr",
-    "read",
-    "write",
-    "append",
-    "rename",
-    "link",
-    "unlink",
-    "ioctl",
-    "lock"
-  ],
-  "relabelfrom_fifo_file_perms": [
-    "getattr",
-    "relabelfrom"
-  ],
-  "relabelto_fifo_file_perms": [
-    "getattr",
-    "relabelto"
-  ],
-  "relabel_fifo_file_perms": [
-    "getattr",
-    "relabelfrom",
-    "relabelto"
-  ],
-  "getattr_sock_file_perms": [
-    "getattr"
-  ],
-  "setattr_sock_file_perms": [
-    "setattr"
-  ],
-  "read_sock_file_perms": [
-    "getattr",
-    "open",
-    "read"
-  ],
-  "write_sock_file_perms": [
-    "getattr",
-    "write",
-    "open",
-    "append"
-  ],
-  "rw_sock_file_perms": [
-    "getattr",
-    "open",
-    "read",
-    "write",
-    "append"
-  ],
-  "create_sock_file_perms": [
-    "getattr",
-    "create",
-    "open"
-  ],
-  "rename_sock_file_perms": [
-    "getattr",
-    "rename"
-  ],
-  "delete_sock_file_perms": [
-    "getattr",
-    "unlink"
-  ],
-  "manage_sock_file_perms": [
-    "create",
-    "open",
-    "getattr",
-    "setattr",
-    "read",
-    "write",
-    "rename",
-    "link",
-    "unlink",
-    "ioctl",
-    "lock",
-    "append"
-  ],
-  "relabelfrom_sock_file_perms": [
-    "getattr",
-    "relabelfrom"
-  ],
-  "relabelto_sock_file_perms": [
-    "getattr",
-    "relabelto"
-  ],
-  "relabel_sock_file_perms": [
-    "getattr",
-    "relabelfrom",
-    "relabelto"
-  ],
-  "getattr_blk_file_perms": [
-    "getattr"
-  ],
-  "setattr_blk_file_perms": [
-    "setattr"
-  ],
-  "read_blk_file_perms": [
-    "getattr",
-    "open",
-    "read",
-    "lock",
-    "ioctl"
-  ],
-  "append_blk_file_perms": [
-    "getattr",
-    "open",
-    "append",
-    "lock",
-    "ioctl"
-  ],
-  "write_blk_file_perms": [
-    "getattr",
-    "open",
-    "write",
-    "append",
-    "lock",
-    "ioctl"
-  ],
-  "rw_blk_file_perms": [
-    "getattr",
-    "open",
-    "read",
-    "write",
-    "append",
-    "ioctl",
-    "lock"
-  ],
-  "create_blk_file_perms": [
-    "getattr",
-    "create"
-  ],
-  "rename_blk_file_perms": [
-    "getattr",
-    "rename"
-  ],
-  "delete_blk_file_perms": [
-    "getattr",
-    "unlink"
-  ],
-  "manage_blk_file_perms": [
-    "create",
-    "open",
-    "getattr",
-    "setattr",
-    "read",
-    "write",
-    "append",
-    "rename",
-    "link",
-    "unlink",
-    "ioctl",
-    "lock"
-  ],
-  "relabelfrom_blk_file_perms": [
-    "getattr",
-    "relabelfrom"
-  ],
-  "relabelto_blk_file_perms": [
-    "getattr",
-    "relabelto"
-  ],
-  "relabel_blk_file_perms": [
-    "getattr",
-    "relabelfrom",
-    "relabelto"
-  ],
-  "getattr_chr_file_perms": [
-    "getattr"
-  ],
-  "setattr_chr_file_perms": [
-    "setattr"
-  ],
-  "read_chr_file_perms": [
-    "getattr",
-    "open",
-    "read",
-    "lock",
-    "ioctl"
-  ],
-  "append_chr_file_perms": [
-    "getattr",
-    "open",
-    "append",
-    "lock",
-    "ioctl"
-  ],
-  "write_chr_file_perms": [
-    "getattr",
-    "open",
-    "write",
-    "append",
-    "lock",
-    "ioctl"
-  ],
-  "rw_chr_file_perms": [
-    "getattr",
-    "open",
-    "read",
-    "write",
-    "append",
-    "ioctl",
-    "lock"
-  ],
-  "create_chr_file_perms": [
-    "getattr",
-    "create"
-  ],
-  "rename_chr_file_perms": [
-    "getattr",
-    "rename"
-  ],
-  "delete_chr_file_perms": [
-    "getattr",
-    "unlink"
-  ],
-  "manage_chr_file_perms": [
-    "create",
-    "open",
-    "getattr",
-    "setattr",
-    "read",
-    "write",
-    "append",
-    "rename",
-    "link",
-    "unlink",
-    "ioctl",
-    "lock"
-  ],
-  "relabelfrom_chr_file_perms": [
-    "getattr",
-    "relabelfrom"
-  ],
-  "relabelto_chr_file_perms": [
-    "getattr",
-    "relabelto"
-  ],
-  "relabel_chr_file_perms": [
-    "getattr",
-    "relabelfrom",
-    "relabelto"
-  ],
-  "rw_inherited_term_perms": [
-    "getattr",
-    "read",
-    "write",
-    "append",
-    "ioctl"
-  ],
-  "rw_term_perms": [
-    "getattr",
-    "read",
-    "write",
-    "append",
-    "ioctl",
-    "open"
-  ],
-  "client_stream_socket_perms": [
-    "create",
-    "ioctl",
-    "read",
-    "getattr",
-    "write",
-    "setattr",
-    "append",
-    "bind",
-    "getopt",
-    "setopt",
-    "shutdown"
-  ],
-  "server_stream_socket_perms": [
-    "create",
-    "ioctl",
-    "read",
-    "getattr",
-    "write",
-    "setattr",
-    "append",
-    "bind",
-    "getopt",
-    "setopt",
-    "shutdown",
-    "listen",
-    "accept"
-  ],
-  "manage_key_perms": [
-    "create",
-    "link",
-    "read",
-    "search",
-    "setattr",
-    "view",
-    "write"
-  ]
+    "dir_file_class_set": [
+        "dir",
+        "file_class_set"
+    ],
+    "file_class_set": [
+        "devfile_class_set",
+        "notdevfile_class_set"
+    ],
+    "notdevfile_class_set": [
+        "fifo_file",
+        "file",
+        "lnk_file",
+        "sock_file"
+    ],
+    "devfile_class_set": [
+        "blk_file",
+        "chr_file"
+    ],
+    "socket_class_set": [
+        "tcp_socket",
+        "udp_socket",
+        "rawip_socket",
+        "netlink_socket",
+        "packet_socket",
+        "unix_stream_socket",
+        "unix_dgram_socket",
+        "appletalk_socket",
+        "netlink_route_socket",
+        "netlink_firewall_socket",
+        "netlink_tcpdiag_socket",
+        "netlink_nflog_socket",
+        "netlink_xfrm_socket",
+        "netlink_selinux_socket",
+        "netlink_audit_socket",
+        "netlink_ip6fw_socket",
+        "netlink_dnrt_socket",
+        "netlink_kobject_uevent_socket",
+        "tun_socket",
+        "netlink_iscsi_socket",
+        "netlink_fib_lookup_socket",
+        "netlink_connector_socket",
+        "netlink_netfilter_socket",
+        "netlink_generic_socket",
+        "netlink_scsitransport_socket",
+        "netlink_rdma_socket",
+        "netlink_crypto_socket",
+        "sctp_socket",
+        "icmp_socket",
+        "ax25_socket",
+        "ipx_socket",
+        "netrom_socket",
+        "atmpvc_socket",
+        "x25_socket",
+        "rose_socket",
+        "decnet_socket",
+        "atmsvc_socket",
+        "rds_socket",
+        "irda_socket",
+        "pppox_socket",
+        "llc_socket",
+        "can_socket",
+        "tipc_socket",
+        "bluetooth_socket",
+        "iucv_socket",
+        "rxrpc_socket",
+        "isdn_socket",
+        "phonet_socket",
+        "ieee802154_socket",
+        "caif_socket",
+        "alg_socket",
+        "nfc_socket",
+        "vsock_socket",
+        "kcm_socket",
+        "qipcrtr_socket",
+        "smc_socket"
+    ],
+    "dgram_socket_class_set": [
+        "udp_socket",
+        "unix_dgram_socket"
+    ],
+    "stream_socket_class_set": [
+        "tcp_socket",
+        "unix_stream_socket"
+    ],
+    "unpriv_socket_class_set": [
+        "tcp_socket",
+        "udp_socket",
+        "unix_stream_socket",
+        "unix_dgram_socket"
+    ],
+    "mount_fs_perms": [
+        "mount",
+        "remount",
+        "unmount",
+        "getattr"
+    ],
+    "rw_socket_perms": [
+        "ioctl",
+        "read",
+        "getattr",
+        "write",
+        "setattr",
+        "append",
+        "bind",
+        "connect",
+        "getopt",
+        "setopt",
+        "shutdown"
+    ],
+    "create_socket_perms": [
+        "create",
+        "rw_socket_perms"
+    ],
+    "rw_stream_socket_perms": [
+        "rw_socket_perms",
+        "listen",
+        "accept"
+    ],
+    "create_stream_socket_perms": [
+        "create_socket_perms",
+        "listen",
+        "accept"
+    ],
+    "connected_socket_perms": [
+        "create",
+        "ioctl",
+        "read",
+        "getattr",
+        "write",
+        "setattr",
+        "append",
+        "bind",
+        "getopt",
+        "setopt",
+        "shutdown"
+    ],
+    "connected_stream_socket_perms": [
+        "connected_socket_perms",
+        "listen",
+        "accept"
+    ],
+    "create_netlink_socket_perms": [
+        "create_socket_perms",
+        "nlmsg_read",
+        "nlmsg_write"
+    ],
+    "rw_netlink_socket_perms": [
+        "create_socket_perms",
+        "nlmsg_read",
+        "nlmsg_write"
+    ],
+    "r_netlink_socket_perms": [
+        "create_socket_perms",
+        "nlmsg_read"
+    ],
+    "signal_perms": [
+        "sigchld",
+        "sigkill",
+        "sigstop",
+        "signull",
+        "signal"
+    ],
+    "packet_perms": [
+        "tcp_recv",
+        "tcp_send",
+        "udp_recv",
+        "udp_send",
+        "rawip_recv",
+        "rawip_send"
+    ],
+    "r_sem_perms": [
+        "associate",
+        "getattr",
+        "read",
+        "unix_read"
+    ],
+    "rw_sem_perms": [
+        "r_sem_perms",
+        "unix_write",
+        "write"
+    ],
+    "create_sem_perms": [
+        "create",
+        "destroy",
+        "rw_sem_perms",
+        "setattr"
+    ],
+    "r_msgq_perms": [
+        "associate",
+        "getattr",
+        "read",
+        "unix_read"
+    ],
+    "rw_msgq_perms": [
+        "enqueue",
+        "r_msgq_perms",
+        "unix_write",
+        "write"
+    ],
+    "create_msgq_perms": [
+        "create",
+        "destroy",
+        "rw_msgq_perms",
+        "setattr"
+    ],
+    "r_shm_perms": [
+        "associate",
+        "getattr",
+        "read",
+        "unix_read"
+    ],
+    "rw_shm_perms": [
+        "lock",
+        "r_shm_perms",
+        "unix_write",
+        "write"
+    ],
+    "create_shm_perms": [
+        "create",
+        "destroy",
+        "lock",
+        "rw_shm_perms",
+        "setattr"
+    ],
+    "getattr_dir_perms": [
+        "getattr"
+    ],
+    "setattr_dir_perms": [
+        "setattr"
+    ],
+    "search_dir_perms": [
+        "getattr",
+        "search",
+        "open"
+    ],
+    "list_dir_perms": [
+        "getattr",
+        "search",
+        "open",
+        "read",
+        "lock",
+        "ioctl"
+    ],
+    "add_entry_dir_perms": [
+        "getattr",
+        "search",
+        "open",
+        "lock",
+        "ioctl",
+        "write",
+        "add_name"
+    ],
+    "del_entry_dir_perms": [
+        "getattr",
+        "search",
+        "open",
+        "lock",
+        "ioctl",
+        "write",
+        "remove_name"
+    ],
+    "rw_dir_perms": [
+        "open",
+        "read",
+        "getattr",
+        "lock",
+        "search",
+        "ioctl",
+        "add_name",
+        "remove_name",
+        "write"
+    ],
+    "create_dir_perms": [
+        "getattr",
+        "create"
+    ],
+    "rename_dir_perms": [
+        "getattr",
+        "rename"
+    ],
+    "delete_dir_perms": [
+        "getattr",
+        "rmdir"
+    ],
+    "manage_dir_perms": [
+        "create",
+        "open",
+        "getattr",
+        "setattr",
+        "read",
+        "write",
+        "link",
+        "unlink",
+        "rename",
+        "search",
+        "add_name",
+        "remove_name",
+        "reparent",
+        "rmdir",
+        "lock",
+        "ioctl"
+    ],
+    "relabelfrom_dir_perms": [
+        "getattr",
+        "relabelfrom"
+    ],
+    "relabelto_dir_perms": [
+        "getattr",
+        "relabelto"
+    ],
+    "relabel_dir_perms": [
+        "getattr",
+        "relabelfrom",
+        "relabelto"
+    ],
+    "getattr_file_perms": [
+        "getattr"
+    ],
+    "setattr_file_perms": [
+        "setattr"
+    ],
+    "read_file_perms": [
+        "getattr",
+        "open",
+        "read",
+        "lock",
+        "ioctl"
+    ],
+    "mmap_file_perms": [
+        "getattr",
+        "open",
+        "map",
+        "read",
+        "execute",
+        "ioctl"
+    ],
+    "mmap_read_inherited_file_perms": [
+        "getattr",
+        "map",
+        "read",
+        "ioctl"
+    ],
+    "mmap_read_file_perms": [
+        "getattr",
+        "open",
+        "map",
+        "read",
+        "ioctl"
+    ],
+    "mmap_exec_inherited_file_perms": [
+        "getattr",
+        "map",
+        "read",
+        "execute",
+        "ioctl"
+    ],
+    "mmap_exec_file_perms": [
+        "getattr",
+        "open",
+        "map",
+        "read",
+        "execute",
+        "ioctl"
+    ],
+    "exec_file_perms": [
+        "getattr",
+        "open",
+        "map",
+        "read",
+        "execute",
+        "ioctl",
+        "execute_no_trans"
+    ],
+    "append_file_perms": [
+        "getattr",
+        "open",
+        "append",
+        "lock",
+        "ioctl"
+    ],
+    "write_inherited_file_perms": [
+        "getattr",
+        "write",
+        "append",
+        "lock",
+        "ioctl"
+    ],
+    "write_file_perms": [
+        "getattr",
+        "open",
+        "write",
+        "append",
+        "lock",
+        "ioctl"
+    ],
+    "rw_inherited_file_perms": [
+        "getattr",
+        "read",
+        "write",
+        "append",
+        "ioctl",
+        "lock"
+    ],
+    "rw_file_perms": [
+        "open",
+        "rw_inherited_file_perms"
+    ],
+    "mmap_rw_inherited_file_perms": [
+        "getattr",
+        "map",
+        "read",
+        "write",
+        "ioctl"
+    ],
+    "mmap_rw_file_perms": [
+        "getattr",
+        "open",
+        "map",
+        "read",
+        "write",
+        "ioctl"
+    ],
+    "create_file_perms": [
+        "getattr",
+        "create",
+        "open"
+    ],
+    "rename_file_perms": [
+        "getattr",
+        "rename"
+    ],
+    "delete_file_perms": [
+        "getattr",
+        "unlink"
+    ],
+    "manage_file_perms": [
+        "create",
+        "open",
+        "getattr",
+        "setattr",
+        "read",
+        "write",
+        "append",
+        "rename",
+        "link",
+        "unlink",
+        "ioctl",
+        "lock"
+    ],
+    "relabelfrom_file_perms": [
+        "getattr",
+        "relabelfrom"
+    ],
+    "relabelto_file_perms": [
+        "getattr",
+        "relabelto"
+    ],
+    "relabel_file_perms": [
+        "getattr",
+        "relabelfrom",
+        "relabelto"
+    ],
+    "getattr_lnk_file_perms": [
+        "getattr"
+    ],
+    "setattr_lnk_file_perms": [
+        "setattr"
+    ],
+    "read_lnk_file_perms": [
+        "getattr",
+        "read"
+    ],
+    "append_lnk_file_perms": [
+        "getattr",
+        "append",
+        "lock",
+        "ioctl"
+    ],
+    "write_lnk_file_perms": [
+        "getattr",
+        "append",
+        "write",
+        "lock",
+        "ioctl"
+    ],
+    "rw_lnk_file_perms": [
+        "getattr",
+        "read",
+        "write",
+        "lock",
+        "ioctl"
+    ],
+    "create_lnk_file_perms": [
+        "create",
+        "getattr"
+    ],
+    "rename_lnk_file_perms": [
+        "getattr",
+        "rename"
+    ],
+    "delete_lnk_file_perms": [
+        "getattr",
+        "unlink"
+    ],
+    "manage_lnk_file_perms": [
+        "create",
+        "read",
+        "write",
+        "getattr",
+        "setattr",
+        "link",
+        "unlink",
+        "rename",
+        "ioctl",
+        "lock"
+    ],
+    "relabelfrom_lnk_file_perms": [
+        "getattr",
+        "relabelfrom"
+    ],
+    "relabelto_lnk_file_perms": [
+        "getattr",
+        "relabelto"
+    ],
+    "relabel_lnk_file_perms": [
+        "getattr",
+        "relabelfrom",
+        "relabelto"
+    ],
+    "getattr_fifo_file_perms": [
+        "getattr"
+    ],
+    "setattr_fifo_file_perms": [
+        "setattr"
+    ],
+    "read_fifo_file_perms": [
+        "getattr",
+        "open",
+        "read",
+        "lock",
+        "ioctl"
+    ],
+    "append_fifo_file_perms": [
+        "getattr",
+        "open",
+        "append",
+        "lock",
+        "ioctl"
+    ],
+    "write_fifo_file_perms": [
+        "getattr",
+        "open",
+        "write",
+        "append",
+        "lock",
+        "ioctl"
+    ],
+    "rw_inherited_fifo_file_perms": [
+        "getattr",
+        "read",
+        "write",
+        "append",
+        "ioctl",
+        "lock"
+    ],
+    "rw_fifo_file_perms": [
+        "open",
+        "rw_inherited_fifo_file_perms"
+    ],
+    "create_fifo_file_perms": [
+        "getattr",
+        "create",
+        "open"
+    ],
+    "rename_fifo_file_perms": [
+        "getattr",
+        "rename"
+    ],
+    "delete_fifo_file_perms": [
+        "getattr",
+        "unlink"
+    ],
+    "manage_fifo_file_perms": [
+        "create",
+        "open",
+        "getattr",
+        "setattr",
+        "read",
+        "write",
+        "append",
+        "rename",
+        "link",
+        "unlink",
+        "ioctl",
+        "lock"
+    ],
+    "relabelfrom_fifo_file_perms": [
+        "getattr",
+        "relabelfrom"
+    ],
+    "relabelto_fifo_file_perms": [
+        "getattr",
+        "relabelto"
+    ],
+    "relabel_fifo_file_perms": [
+        "getattr",
+        "relabelfrom",
+        "relabelto"
+    ],
+    "getattr_sock_file_perms": [
+        "getattr"
+    ],
+    "setattr_sock_file_perms": [
+        "setattr"
+    ],
+    "read_sock_file_perms": [
+        "getattr",
+        "open",
+        "read"
+    ],
+    "write_sock_file_perms": [
+        "getattr",
+        "write",
+        "open",
+        "append"
+    ],
+    "rw_sock_file_perms": [
+        "getattr",
+        "open",
+        "read",
+        "write",
+        "append"
+    ],
+    "create_sock_file_perms": [
+        "getattr",
+        "create",
+        "open"
+    ],
+    "rename_sock_file_perms": [
+        "getattr",
+        "rename"
+    ],
+    "delete_sock_file_perms": [
+        "getattr",
+        "unlink"
+    ],
+    "manage_sock_file_perms": [
+        "create",
+        "open",
+        "getattr",
+        "setattr",
+        "read",
+        "write",
+        "rename",
+        "link",
+        "unlink",
+        "ioctl",
+        "lock",
+        "append"
+    ],
+    "relabelfrom_sock_file_perms": [
+        "getattr",
+        "relabelfrom"
+    ],
+    "relabelto_sock_file_perms": [
+        "getattr",
+        "relabelto"
+    ],
+    "relabel_sock_file_perms": [
+        "getattr",
+        "relabelfrom",
+        "relabelto"
+    ],
+    "getattr_blk_file_perms": [
+        "getattr"
+    ],
+    "setattr_blk_file_perms": [
+        "setattr"
+    ],
+    "read_blk_file_perms": [
+        "getattr",
+        "open",
+        "read",
+        "lock",
+        "ioctl"
+    ],
+    "append_blk_file_perms": [
+        "getattr",
+        "open",
+        "append",
+        "lock",
+        "ioctl"
+    ],
+    "write_blk_file_perms": [
+        "getattr",
+        "open",
+        "write",
+        "append",
+        "lock",
+        "ioctl"
+    ],
+    "rw_blk_file_perms": [
+        "getattr",
+        "open",
+        "read",
+        "write",
+        "append",
+        "ioctl",
+        "lock"
+    ],
+    "create_blk_file_perms": [
+        "getattr",
+        "create"
+    ],
+    "rename_blk_file_perms": [
+        "getattr",
+        "rename"
+    ],
+    "delete_blk_file_perms": [
+        "getattr",
+        "unlink"
+    ],
+    "manage_blk_file_perms": [
+        "create",
+        "open",
+        "getattr",
+        "setattr",
+        "read",
+        "write",
+        "append",
+        "rename",
+        "link",
+        "unlink",
+        "ioctl",
+        "lock"
+    ],
+    "relabelfrom_blk_file_perms": [
+        "getattr",
+        "relabelfrom"
+    ],
+    "relabelto_blk_file_perms": [
+        "getattr",
+        "relabelto"
+    ],
+    "relabel_blk_file_perms": [
+        "getattr",
+        "relabelfrom",
+        "relabelto"
+    ],
+    "getattr_chr_file_perms": [
+        "getattr"
+    ],
+    "setattr_chr_file_perms": [
+        "setattr"
+    ],
+    "read_chr_file_perms": [
+        "getattr",
+        "open",
+        "read",
+        "lock",
+        "ioctl"
+    ],
+    "append_chr_file_perms": [
+        "getattr",
+        "open",
+        "append",
+        "lock",
+        "ioctl"
+    ],
+    "write_chr_file_perms": [
+        "getattr",
+        "open",
+        "write",
+        "append",
+        "lock",
+        "ioctl"
+    ],
+    "rw_chr_file_perms": [
+        "getattr",
+        "open",
+        "read",
+        "write",
+        "append",
+        "ioctl",
+        "lock"
+    ],
+    "create_chr_file_perms": [
+        "getattr",
+        "create"
+    ],
+    "rename_chr_file_perms": [
+        "getattr",
+        "rename"
+    ],
+    "delete_chr_file_perms": [
+        "getattr",
+        "unlink"
+    ],
+    "manage_chr_file_perms": [
+        "create",
+        "open",
+        "getattr",
+        "setattr",
+        "read",
+        "write",
+        "append",
+        "rename",
+        "link",
+        "unlink",
+        "ioctl",
+        "lock"
+    ],
+    "relabelfrom_chr_file_perms": [
+        "getattr",
+        "relabelfrom"
+    ],
+    "relabelto_chr_file_perms": [
+        "getattr",
+        "relabelto"
+    ],
+    "relabel_chr_file_perms": [
+        "getattr",
+        "relabelfrom",
+        "relabelto"
+    ],
+    "rw_inherited_term_perms": [
+        "getattr",
+        "read",
+        "write",
+        "append",
+        "ioctl"
+    ],
+    "rw_term_perms": [
+        "rw_inherited_term_perms",
+        "open"
+    ],
+    "client_stream_socket_perms": [
+        "create",
+        "ioctl",
+        "read",
+        "getattr",
+        "write",
+        "setattr",
+        "append",
+        "bind",
+        "getopt",
+        "setopt",
+        "shutdown"
+    ],
+    "server_stream_socket_perms": [
+        "client_stream_socket_perms",
+        "listen",
+        "accept"
+    ],
+    "manage_key_perms": [
+        "create",
+        "link",
+        "read",
+        "search",
+        "setattr",
+        "view",
+        "write"
+    ]
 }
