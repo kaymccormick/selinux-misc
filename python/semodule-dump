@@ -3,7 +3,6 @@
 # Export modules in CIL format
 #
 import logging
-from git import Repo
 import argparse
 from semanage import semanage_handle_create, semanage_connect, \
     semanage_module_list, semanage_module_info_get_name, \
@@ -21,22 +20,13 @@ with open("ignore_modules.txt", "r") as f:
       dist_modules[module] = True
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--selinux-policy-src', help="Specify path to selinux policy sources.", action="store")
-parser.add_argument('--git-repo', help="Specify git repository directory", action="store")
+parser.add_argument('--output-dir', '-o', help="Output directory for SELinux module dump.")
 
 args = parser.parse_args()
-repo = None
-output_dir = "."
-if args.git_repo:
-   output_dir = args.git_repo
-   if not os.path.exists(args.git_repo):
-      repo = Repo.init(args.git_repo)
-   else:
-      repo = Repo(args.git_repo)
-
+# need to canonicalize this?
+output_dir = args.output_dir
 
 sh = semanage_handle_create()
-#semanage_set_create_store(sh, 1);
 if semanage_connect(sh):
    exit(1)
    
@@ -51,8 +41,6 @@ while i < b:
       if name in dist_modules:
          continue
 
-      print(name)
-
       (result, modkey) = semanage_module_key_create(sh)
       semanage_module_key_set_name(sh, modkey, name)
 
@@ -66,7 +54,3 @@ while i < b:
       with open(fname, "w") as f:
          f.write(module_content)
 
-      index.add([base_fname])
-
-
-commit = index.commit("Commit from semod2")
