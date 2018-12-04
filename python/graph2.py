@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+
+from selinux import string_to_security_class, string_to_av_perm, security_av_string
 import sexpdata
 import json
 import sys
@@ -89,8 +91,9 @@ def parse_obj_perm_sets(filename):
     return perm_sets
 
 
-            
+o            
 perm_sets = parse_obj_perm_sets(obj_perm_sets_spt)
+json.dump(perm_sets, fp=sys.stdout)
 by_perms = {}
 for k, v in perm_sets.items():
     by_perms[' '.join(sorted(v))] = k
@@ -134,13 +137,21 @@ while i < b:
         elif entry[0].value() == "allow":
             (class_symbol, perms) = entry[3]
 
-            dot.attr(color='red')
+            class_name = class_symbol.value()
+            security_class = string_to_security_class(class_name)
             
             #perm_str = '{'
             perm_str = ''
             permvals = []
-            for perm in perms:
-                permvals.append(perm.value())
+            avs = 0
+            for p in perms:
+                perm = p.value()
+                perm_av = string_to_av_perm(security_class, perm)
+                avs = avs | perm_av
+                print("%16s %08x" % (perm, perm_av))
+                permvals.append(perm)
+
+            print("SECUREITY ", security_av_string(security_class, avs))
 
             permvals = sorted(permvals)
             perm_str = ' '.join(permvals)
