@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 
-from selinux import string_to_security_class, string_to_av_perm, security_av_string
+from selinux import string_to_security_class, string_to_av_perm, security_av_string, security_class_to_string
 import sexpdata
 import json
 import sys
@@ -16,7 +16,28 @@ from semanage import semanage_handle_create, semanage_connect, \
 refpolicy_dir = '/home/user/j/jade/refpolicy/'
 obj_perm_sets_spt = '/home/user/j/jade/obj_perm_sets.spt'
 output_dir = "/home/user/j/jade/public_html/graphs"
+perm_sets_json = 'perm_sets.json'
 
+with open("classes.txt", "r") as f:
+    for a in f:
+        a = a.rstrip()
+        r = string_to_security_class(a)
+        print("%d %s" % (r, a))
+
+exit(1)
+        
+i = 0
+errors = 0
+while errors < 5:
+    x = security_class_to_string(i)
+    if x:
+        print("%d %s" % i, x)
+        errors = 0
+    else:
+        errors += 1
+    i = i + 1
+    
+    
 def slurp_arg(contents):
     if(contents[0] == '`'):
         match = re.match(r'`([^`\']+)\'', contents)
@@ -32,12 +53,9 @@ def parse_obj_perm_sets(filename):
     with open(filename, 'r') as f:
         contents = ''.join(f.readlines())
         while contents:
-#            print(repr(contents))
             match = re.match(r'(?am)^\s*(#.*)\r?\n', contents)
             if match:
-#                print("match1")
                 (comment,) = match.groups()
-#                print("comment = %r"%comment)
                 contents = contents[match.end():]
                 continue
             
@@ -48,7 +66,6 @@ def parse_obj_perm_sets(filename):
                 assert 0
                 
             word = match.group(1)
-            print("word is ", word)
             contents = contents[match.end():]
             if contents[0] == '(':
                 if word == "changequote":
@@ -56,7 +73,6 @@ def parse_obj_perm_sets(filename):
                 if word == "policy_module":
                     pass
                 if word == "define":
-                    print("in define")
                     contents = contents[1:].lstrip()
                     (contents, arg) = slurp_arg(contents)
                     match = re.match(r'(?am)^,\s*', contents)
@@ -64,7 +80,6 @@ def parse_obj_perm_sets(filename):
                         print("derp: ", repr(contents))
                         assert 0
                     contents = contents[match.end():]
-                    print("arg is", arg)
                     (contents, arg2) = slurp_arg(contents)
                     match2 = re.match('\s*{\s*(.*)\s*}\s*', arg2)
                     if match2:
@@ -75,28 +90,24 @@ def parse_obj_perm_sets(filename):
                             print(repr(perm))
                             if perm in perm_sets:
                                 for perm2 in perm_sets[perm]:
-                                    print("%s %s" % (perm, perm2))
                                     my_perms[perm2] = True
 
                             else:
                                 my_perms[perm] = True
 
-                        print("stashing for %s" %arg)
                         perm_sets[arg] = list(my_perms.keys())
-                        print("for %r" %perm_sets[arg])
-                        
-                            
                             
             contents = contents[match.end():]
     return perm_sets
 
 
-o            
 perm_sets = parse_obj_perm_sets(obj_perm_sets_spt)
 json.dump(perm_sets, fp=sys.stdout)
 by_perms = {}
 for k, v in perm_sets.items():
+    # sorting doesn't make sense!
     by_perms[' '.join(sorted(v))] = k
+
 
 sh = semanage_handle_create()
 if semanage_connect(sh):
@@ -151,7 +162,10 @@ while i < b:
                 print("%16s %08x" % (perm, perm_av))
                 permvals.append(perm)
 
-            print("SECUREITY ", security_av_string(security_class, avs))
+            (result, av_string) = security_av_string(security_class, avs)
+            if not result:
+                print("AV string is %s" % av_string)
+            
 
             permvals = sorted(permvals)
             perm_str = ' '.join(permvals)
