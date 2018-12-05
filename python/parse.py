@@ -19,13 +19,19 @@ def slurp_arg(contents, eat_comma=True):
     my_class = r'-~{}:/\w_"\*\$\.;'
     logger.info(my_class)
     while True:
+        contents = contents.lstrip()
+        match = re.match(r'#.*', contents)
+        if match:
+            contents = contents[match.end():]
+            continue
+
         if quoted:
-            rgxp = r'(?am)([' + my_class + r',^`\']*)'
+            rgxp = r'(?am)([' + my_class + r',\(\)\s]*)'
             logger.debug("regexp is %s", rgxp)
             match = re.match(rgxp, contents)
 
         else:
-            rgxp = r'(?am)([' + my_class + r'^`\',\)]*)'
+            rgxp = r'(?am)([' + my_class + r']*)'
             logger.debug("regexp is %s", rgxp)
             match = re.match(rgxp, contents)
             
@@ -81,7 +87,7 @@ def parse_file(filename, interface):
             pos += len(contents) - cur_len
             logger.debug("pos = %d", pos)
             
-            match = re.match(r'(?am)^\s*([-~{}:/\w_"\*\$,\.;]+)\s*', contents)
+            match = re.match(r'(?am)^\s*([!-~{}:/\w_"\*\$,\.;]+)\s*', contents)
             logger.debug("%r", match)
             if not match:
                 logger.info("ZContents = %s", contents[0:32])
