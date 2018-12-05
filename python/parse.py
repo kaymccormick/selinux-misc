@@ -16,11 +16,18 @@ def slurp_arg(contents, eat_comma=True):
     logger.info("2Contents = %s", contents[0:32])
         
     argument = ''
+    my_class = r'-~{}:/\w_"\*\$\.;'
+    logger.info(my_class)
     while True:
         if quoted:
-            match = re.match(r'(?am)([^`\']*)', contents)
+            rgxp = r'(?am)([' + my_class + r',^`\']*)'
+            logger.debug("regexp is %s", rgxp)
+            match = re.match(rgxp, contents)
+
         else:
-            match = re.match(r'(?am)([^`\',\)]*)', contents)
+            rgxp = r'(?am)([' + my_class + r'^`\',\)]*)'
+            logger.debug("regexp is %s", rgxp)
+            match = re.match(rgxp, contents)
             
         if match:
             logger.info("here mtch")
@@ -45,7 +52,7 @@ def slurp_arg(contents, eat_comma=True):
                 return (contents, argument, isend)
                     
             if contents[0] == '`':
-                (contents,result) = slurp_arg(contents)
+                (contents,result,isend) = slurp_arg(contents)
                 logger.info("5Contents = %s", contents[0:32])
                 argument += result
 
@@ -74,7 +81,7 @@ def parse_file(filename, interface):
             pos += len(contents) - cur_len
             logger.debug("pos = %d", pos)
             
-            match = re.match(r'(?am)^\s*([\w\.]+)\s*', contents)
+            match = re.match(r'(?am)^\s*([-~{}:/\w_"\*\$,\.;]+)\s*', contents)
             logger.debug("%r", match)
             if not match:
                 logger.info("ZContents = %s", contents[0:32])
@@ -86,7 +93,7 @@ def parse_file(filename, interface):
             contents = contents[match.end():]
             pos = pos + match.end()
             cur_len = len(contents)
-            if contents[0] == '(':
+            if len(contents) and contents[0] == '(':
                 #print(word)
                 contents = contents[1:].lstrip()
                 pos += 1
@@ -113,14 +120,18 @@ def parse_file(filename, interface):
 
 if __name__ == '__main__':
     interface = {}
+
     if len(sys.argv) > 1:
         files = sys.argv[1:]
     else:
+        files = []
         for filename in sys.stdin:
-            files.append(filename.rstrip)
+            files.append(filename.rstrip())
 
     for filename in files:
-        r = parse_file(filename.rstrip(), interface)
+        logger.info(filename)
+        r = parse_file(filename, interface)
     for iface in interface.keys():
+
         (file, pos, ary) = interface[iface]
         print("%24s %s:%4d" % (iface, file, pos))
