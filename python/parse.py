@@ -16,7 +16,7 @@ def slurp_arg(contents, eat_comma=True):
     logger.info("2Contents = %s", contents[0:32])
         
     argument = ''
-    my_class = r'-~{}:/\w_"\*\$\.;'
+    my_class = r'-!&~{}:/\w_"\*\$\.;'
     logger.info(my_class)
     while True:
         contents = contents.lstrip()
@@ -65,14 +65,13 @@ def slurp_arg(contents, eat_comma=True):
     return (contents,None,True)
             
 
-def parse_file(filename, interface):
+def parse_file(filename, interface, template):
     pos = 0
     with open(filename, 'r') as f:
         comments = []
         contents = ''.join(f.readlines())
         while contents.strip():
-            
-            match = re.match(r'(?am)^\s*(#.*)\r?\n', contents)
+            match = re.match(r'(?am)^\s*(#.*)', contents)
             if match:
                 (comment,) = match.groups()
 #                print(comment)
@@ -87,7 +86,7 @@ def parse_file(filename, interface):
             pos += len(contents) - cur_len
             logger.debug("pos = %d", pos)
             
-            match = re.match(r'(?am)^\s*([!-~{}:/\w_"\*\$,\.;]+)\s*', contents)
+            match = re.match(r'(?am)^\s*([-!&~{}:/\w_"\*\$,\.;]+)\s*', contents)
             logger.debug("%r", match)
             if not match:
                 logger.info("ZContents = %s", contents[0:32])
@@ -100,7 +99,7 @@ def parse_file(filename, interface):
             pos = pos + match.end()
             cur_len = len(contents)
             if len(contents) and contents[0] == '(':
-                #print(word)
+                logging.warning(word)
                 contents = contents[1:].lstrip()
                 pos += 1
                 isend = False
@@ -108,6 +107,10 @@ def parse_file(filename, interface):
                     (contents, name, isend) = slurp_arg(contents)
                     ary = []
                     interface[name] = (filename, pos, ary)
+                if word == "template":
+                    (contents, name, isend) = slurp_arg(contents)
+                    ary = []
+                    template[name] = (filename, pos, ary)
 
                 while not isend:
                     logger.debug("gonna slurp arg")
@@ -126,6 +129,7 @@ def parse_file(filename, interface):
 
 if __name__ == '__main__':
     interface = {}
+    template = {}
 
     if len(sys.argv) > 1:
         files = sys.argv[1:]
@@ -136,8 +140,12 @@ if __name__ == '__main__':
 
     for filename in files:
         logger.info(filename)
-        r = parse_file(filename, interface)
+        r = parse_file(filename, interface, template)
+    
     for iface in interface.keys():
-
         (file, pos, ary) = interface[iface]
-        print("%24s %s:%4d" % (iface, file, pos))
+        print("I:%24s %s:%4d" % (iface, file, pos))
+
+    for iface in template.keys():
+        (file, pos, ary) = template[iface]
+        print("T:%24s %s:%4d" % (iface, file, pos))
