@@ -41,7 +41,8 @@ setup(
     install_requires=requires,
     entry_points={
         'console_scripts': [
-            
+            'selmisc-manage = selinux_misc.manage:main',
+            'selmisc-hypertext = selinux_misc.hypertext:main',
         ],
     },
 )

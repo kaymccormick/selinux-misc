@@ -23,9 +23,9 @@ from tempfile import TemporaryDirectory
 from datetime import datetime
 import time
 import logging
-import glob
-import socket
 import os
+import os.path
+
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 
@@ -40,7 +40,6 @@ from yaml import load, dump
 
 import selinux_misc.parse as parse
 
-logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 allow_regexp = r'^allow\s+(\S+)\s+([^\s:]+):(\S+)\s+(.*);'
@@ -76,46 +75,38 @@ class Host(NameMixin):
 class Module(NameMixin):
     num_read_bytes = 1024
     
-    def __init__(self, rules, host, name):
+    def __init__(self, rules, context, name):
         self._rules = rules
-        self._host = host
+        self._context = context
         self._name = name
 
     def load_from_file(self, file):
         interface = {}
         template = {}
-        parse.parse_file(str(file), interface, template)
-
-    def load_from_str(self, contents):
-        while True:
-            match = re.match(r'(?am)^\s*(#.*)\r?\n', contents)
-            if match:
-                (comment,) = match.groups()
-                print("comment = %r"%comment)
-                contents = contents[match.end():]
-                continue
+        logger.debug("loading from file %s", file)
+        parse_result = parse.parse_file(str(file), interface, template)
+        for key in interface.keys():
+            logger.warning("interface key is %s", key)
             
-            match = re.match(r'(?am)^\s*(\w+)\s*', contents)
-            assert match, contents[0:12] + '...'
-            (word,) = match.groups()
-            if contents[0] == '(':
-                if word == "changequote":
-                    assert False, "changequote unsupported"
-                if word == "policy_module":
-                    pass
-            contents = contents[match.end():]
-#            re.match(r'^\(\w
-            print(contents[0])
-            exit(1)
+        self._parse_result = parse_result
+        self._interface = interface
+        self._template = template
+
+    @property
+    def parse_result(self):
+        return self._parse_result
+
+    def get_interface_names(self):
+        return list(self._interface.keys())
 
 
 class ClassRules(NameMixin):
-    def __init__(self, host, source, target, class_):
+    def __init__(self, xontext, source, target, class_):
         self._name = class_
         self._rules = {}
         self._source = source
         self._target = target
-        self._host = host
+        self._context = context
     def has_op(self, op, *args):
         if args:
             self._rules[op] = args[0]
@@ -123,32 +114,32 @@ class ClassRules(NameMixin):
     
 
 class TargetRules(NameMixin):
-    def __init__(self, host, source, target):
+    def __init__(self, context, source, target):
         self._name = target
         self._rules = {}
         self._source = source
-        self._host = host
+        self._host = context
 
     def class_(self, class_):
         if class_ not in self._rules:
-            self._rules[class_] = ClassRules(self._host, self._source, self._name, class_)
+            self._rules[class_] = ClassRules(self._context, self._source, self._name, class_)
         return self._rules[class_]
         
             
 class SourceRules(NameMixin):
-    def __init__(self, host, name):
+    def __init__(self, context, name):
         self._name = name
         self._rules = {}
-        self._host = host
+        self._context = context
         self._iface_calls = {}
 
     def target(self, target):
         if target not in self._rules:
-            self._rules[target] = TargetRules(self._host, self.name, target)
+            self._rules[target] = TargetRules(self._context, self.name, target)
         return self._rules[target]
 
     def add_iface_call(self, line):
-        match = re.match('^(\S+)\(([^,\)]+)(.*)\)$', line)
+        match = re.match(r'^(\S+)\(([^,\)]+)(.*)\)$', line)
         assert match
         (iface, arg1, rest) = match.groups()
         if iface not in self._iface_calls:
@@ -156,7 +147,7 @@ class SourceRules(NameMixin):
         if rest not in self._iface_calls[iface]:
             self._iface_calls[iface][rest] = True
 
-class HostRules(NameMixin):
+class ContextRules(NameMixin):
     def __init__(self, name):
         self._name = name
         self._rules = {}
@@ -170,33 +161,41 @@ class HostRules(NameMixin):
 class Rules(NameMixin):
     def __init__(self, name):
         self._name = name
-        self._hosts = []
+        self._contexts = []
         self._rules = {}
 
-    def add_host(self, host):
-        self._hosts.append(host)
-        self._rules[host] = HostRules(host)
+    def add_context(self, context):
+        self._contexts.append(context)
+        self._rules[context] = ContextRules(context)
 
-    def host(self, host):
-        if host not in self._rules:
-            self.add_host(host)
-        return self._rules[host]
+    def context(self, context):
+        if context not in self._rules:
+            self.add_context(context)
+        return self._rules[context]
 
 class Manage:
     def __init__(self, args, rules):
         self._args = args
         self._rules = rules
+        self._modules = []
+        self._interface = {}
+        self._template = {}
 
     def is_type_enforcement(self, filename):
         return filename.endswith('.te')
 
+    def is_interface(self, filename):
+        return filename.endswith('.if')
+
     def process_input_file(self, context, filename):
-        if self.is_type_enforcement(filename):
+        logger.debug("Processing input file %r", filename)
+        if self.is_type_enforcement(filename) or self.is_interface(filename):
             module_name = Path(filename).stem
-            module = Module(rules.context(context),
+            module = Module(self.rules.context(context),
                             context,
                             module_name)
-            module.load_from_file(file)
+            module.load_from_file(filename)
+            self._modules.append(module)
 
         
     def process_input_directory(self, dir):
@@ -204,8 +203,8 @@ class Manage:
         for root, dirs, files in os.walk(dir):
             context = root
             for file in files:
-                filename = join(root, file)
-                process_input_file(context, filename)
+                filename = os.path.join(root, file)
+                self.process_input_file(context, filename)
         
     def process_input(self):
         if self.args.input_directory:
@@ -218,6 +217,78 @@ class Manage:
     @args.setter
     def args(self, new):
         self._args = new
+
+    @property
+    def rules(self):
+        return self._rules
+
+    @property
+    def modules(self):
+        return self._modules
+
+
+
+def auparse_callback(aup, cb_event_type, user_data):
+    try:
+        r = _mycb(aup, cb_event_type, user_data)
+    except:
+        print("%s" % sys.exc_info()[1])
+        import traceback
+        traceback.print_tb(sys.exc_info()[2])
+
+
+def _mycb(aup, cb_event_type, user_data):
+    if cb_event_type == auparse.AUPARSE_CB_EVENT_READY:
+        if aup.first_record() < 0:
+            return
+
+        lines = []
+        while True:
+            event = aup.get_timestamp()
+            if not user_data['cur_event'] or user_data['cur_event']['serial'] != event.serial:
+                user_data['cur_event'] = dict(sec=event.sec, host=event.host, milli=event.milli, serial=event.serial, scontext=None)
+                lines.append("----")
+                dt = datetime.fromtimestamp(event.sec)
+                lines.append("time->%s" % dt)
+        
+            mytype = aup.get_type_name()
+            message = mytype
+            spec = "%d.%03d:%d" % (event.sec, event.milli, event.serial)
+            message = "node=%s type=%s msg=audit(%s):" % (event.host, mytype, spec)
+            vars = ""
+            while True:
+                f = aup.get_field_name()
+                if not f in ("node", "type"):
+                    t = aup.get_field_type()
+                    v = aup.get_field_str()
+                    procvar = False
+                    if mytype == "AVC":
+                        if f == "seresult":
+                            message = message + " avc:  " + v
+                            procvar = True
+                        elif f == "seperms":
+                            message = message + "  { " + v + " } for "
+                            procvar = True
+                        elif f == "scontext":
+                            user_data['cur_event']['scontext'] = v
+
+                    if not procvar:
+                        vars = vars + " " + f + "=" + v
+                
+                if not aup.next_field(): break
+
+            message = message + vars
+            lines.append(message)
+            if not aup.next_record(): break
+
+        if event.host in hostmap:
+            mapped_host = hostmap[event.host]
+        else:
+            mapped_host = event.host
+        if mapped_host not in user_data['log']:
+            user_data['log'][mapped_host] = []
+
+        user_data['log'][mapped_host].extend(lines)
 
     
 def main():
@@ -258,85 +329,26 @@ def main():
     manage_instance.process_input()
     
     # I'm a bit unsure its wise to parse it but it sounded fun
-    def mycb(aup, cb_event_type, user_data):
-        try:
-            r = _mycb(aup, cb_event_type, user_data)
-        except:
-            print("%s" % sys.exc_info()[1])
-            import traceback
-            traceback.print_tb(sys.exc_info()[2])
-    
-    
-    def _mycb(aup, cb_event_type, user_data):
-        if cb_event_type == auparse.AUPARSE_CB_EVENT_READY:
-            if aup.first_record() < 0:
-                return
-    
-            lines = []
-            while True:
-                event = aup.get_timestamp()
-                if not user_data['cur_event'] or user_data['cur_event']['serial'] != event.serial:
-                    user_data['cur_event'] = dict(sec=event.sec, host=event.host, milli=event.milli, serial=event.serial, scontext=None)
-                    lines.append("----")
-                    dt = datetime.fromtimestamp(event.sec)
-                    lines.append("time->%s" % dt)
-            
-                mytype = aup.get_type_name()
-                #print("type=%s" %mytype)
-                message = mytype
-                spec = "%d.%03d:%d" % (event.sec, event.milli, event.serial)
-                message = "node=%s type=%s msg=audit(%s):" % (event.host, mytype, spec)
-                vars = ""
-                while True:
-                    f = aup.get_field_name()
-                    if not f in ("node", "type"):
-                        t = aup.get_field_type()
-                        v = aup.get_field_str()
-                        procvar = False
-                        if mytype == "AVC":
-                            if f == "seresult":
-                                message = message + " avc:  " + v
-                                procvar = True
-                            elif f == "seperms":
-                                message = message + "  { " + v + " } for "
-                                procvar = True
-                            elif f == "scontext":
-                                user_data['cur_event']['scontext'] = v
-    
-                        if not procvar:
-                            vars = vars + " " + f + "=" + v
-                    
-                    if not aup.next_field(): break
-    
-                message = message + vars
-                lines.append(message)
-                if not aup.next_record(): break
-    
-            if event.host in hostmap:
-                mapped_host = hostmap[event.host]
-            else:
-                mapped_host = event.host
-            if mapped_host not in user_data['log']:
-                user_data['log'][mapped_host] = []
-    
-            user_data['log'][mapped_host].extend(lines)
-    
     try:
         lines = None
         ausearch_out = None
         audit_lines = []
     
         if args.search:
-            ausearch_proc = subprocess.Popen(['/sbin/ausearch', *(args.search.split(' '))], stdout=subprocess.PIPE)
+            # We need to parse the args line, or re-work this
+            ausearch_proc = subprocess.Popen(['/sbin/ausearch',
+                                              *(args.search.split(' '))],
+                                             stdout=subprocess.PIPE)
             if ausearch_proc.returncode:
-                print("ausearch subprocess failed");
-                exit(1)
+                logger.critical("ausearch subprocess failed");
+                return 1
     
         assert ausearch_proc.stdout
     
         cmd = ['audit2allow']
         if args.refpolicy:
             cmd.append('-R')
+
         cmd.extend(['--interface-info', repo[host].working_tree_dir + '/interface_info',
                     '--perm-map', repo[host].working_tree_dir + '/perm_map'])
         
@@ -345,7 +357,7 @@ def main():
     
         aup = auparse.AuParser(auparse.AUSOURCE_FEED)
         user_data = dict(cur_event=None, log={})
-        aup.add_callback(mycb, user_data)
+        aup.add_callback(auparse_callback, user_data)
         
         while ausearch_proc.returncode is None:
             (stdout, stderr) = ausearch_proc.communicate()
@@ -363,7 +375,6 @@ def main():
             autoescape=False,
             )
     
-        print(user_data['log'].keys(), sep="\t")
         for host in user_data['log']:
             x = host.split('.')
             x.reverse()

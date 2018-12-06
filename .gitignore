@@ -1,5 +1,6 @@
 *.egg-info
 _build
+*~
 env
 venv
 **/__pycache__/*
