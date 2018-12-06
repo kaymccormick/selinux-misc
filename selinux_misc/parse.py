@@ -5,18 +5,18 @@ logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 def slurp_arg(contents, eat_comma=True):
-    logger.info("1Contents = %s", contents[0:32])
+    logger.debug("1Contents = %s", contents[0:32])
 
     quoted = False
     if(contents[0] == '`'):
         contents = contents[1:]
         quoted = True
 
-    logger.info("2Contents = %s", contents[0:32])
+    logger.debug("2Contents = %s", contents[0:32])
         
     argument = ''
     my_class = r'-!&~{}:/\w_"\*\$\.;'
-    logger.info(my_class)
+    logger.debug(my_class)
     while True:
         contents = contents.lstrip()
         match = re.match(r'#.*', contents)
@@ -35,11 +35,10 @@ def slurp_arg(contents, eat_comma=True):
             match = re.match(rgxp, contents)
             
         if match:
-            logger.info("here mtch")
             argument += match.group(1)
-            logger.info("%r", match)
+            logger.debug("%r", match)
             contents = contents[match.end():]
-            logger.info("3Contents = %s", contents[0:32])
+            logger.debug("3Contents = %s", contents[0:32])
             termchar = '\''
             if not quoted:
                 termchar = ''
@@ -52,13 +51,13 @@ def slurp_arg(contents, eat_comma=True):
             if submatch:
                 contents = contents[submatch.end():]
                 isend = eat_comma and submatch.group(1).find(')') != -1
-                logger.info("submatch: %r", submatch)
-                logger.info("4Contents = %s", contents[0:32])
+                logger.debug("submatch: %r", submatch)
+                logger.debug("4Contents = %s", contents[0:32])
                 return (contents, argument, isend)
                     
             if contents[0] == '`':
                 (contents,result,isend) = slurp_arg(contents)
-                logger.info("5Contents = %s", contents[0:32])
+                logger.debug("5Contents = %s", contents[0:32])
                 argument += result
 
     return (contents,None,True)
@@ -90,7 +89,7 @@ def parse_file(filename, interface, template, preserve_comments=True):
             match = re.match(r'(?am)^\s*([-!&~{}:/\w_"\*\$,\.;]+)\s*', contents)
             logger.debug("%r", match)
             if not match:
-                logger.info("ZContents = %s", contents[0:32])
+                logger.debug("ZContents = %s", contents[0:32])
                 lines = contents.split('\n')
                 logger.critical("beep: (%s:%d) %s",filename, pos,lines[0])
                 assert 0
@@ -101,7 +100,7 @@ def parse_file(filename, interface, template, preserve_comments=True):
             cur_len = len(contents)
             cur_tuple = ()
             if len(contents) and contents[0] == '(':
-                logging.info(word)
+                logging.debug(word)
                 contents = contents[1:].lstrip()
                 pos += 1
                 isend = False
