@@ -1,4 +1,3 @@
-import sys
 import re
 import logging
 
@@ -65,8 +64,9 @@ def slurp_arg(contents, eat_comma=True):
     return (contents,None,True)
             
 
-def parse_file(filename, interface, template):
+def parse_file(filename, interface, template, preserve_comments=True):
     pos = 0
+    file_ary = []
     with open(filename, 'r') as f:
         comments = []
         contents = ''.join(f.readlines())
@@ -74,7 +74,8 @@ def parse_file(filename, interface, template):
             match = re.match(r'(?am)^\s*(#.*)', contents)
             if match:
                 (comment,) = match.groups()
-#                print(comment)
+                if preserve_comments:
+                    file_ary.append(('comment', comment))
                 comments.append(comment)
                 contents = contents[match.end():]
                 pos = pos + match.end()
@@ -98,17 +99,22 @@ def parse_file(filename, interface, template):
             contents = contents[match.end():]
             pos = pos + match.end()
             cur_len = len(contents)
+            cur_tuple = ()
             if len(contents) and contents[0] == '(':
                 logging.info(word)
                 contents = contents[1:].lstrip()
                 pos += 1
                 isend = False
-                if word == "interface":
+                cmd = word
+                args = []
+                if cmd == "interface":
                     (contents, name, isend) = slurp_arg(contents)
                     ary = []
                     interface[name] = (filename, pos, ary)
-                if word == "template":
+                    args.append(name)
+                if cmd == "template":
                     (contents, name, isend) = slurp_arg(contents)
+                    args.append(name)
                     ary = []
                     template[name] = (filename, pos, ary)
 
@@ -116,6 +122,8 @@ def parse_file(filename, interface, template):
                     logger.debug("gonna slurp arg")
                     (new_c, arg, isend) = slurp_arg(contents)
                     logger.debug("dome slurping, got (%d) %s" %(len(arg), arg))
+
+                    args.append(arg)
                     
                     if arg is None:
                         print("new_c",new_c[0:32])
@@ -124,10 +132,14 @@ def parse_file(filename, interface, template):
                     pos += len(contents) - len(new_c)
                     contents = new_c
 
+                file_ary.append((cmd, args))
             
-    return True
+    return file_ary
 
 if __name__ == '__main__':
+    import sys
+    import json
+
     interface = {}
     template = {}
 
@@ -140,7 +152,9 @@ if __name__ == '__main__':
 
     for filename in files:
         logger.info(filename)
-        r = parse_file(filename, interface, template)
+        r = parse_file(filename, interface, template, preserve_comments=False)
+        print(filename, file=sys.stdout)
+        json.dump(r, fp=sys.stdout, indent=4)
     
     for iface in interface.keys():
         (file, pos, ary) = interface[iface]
