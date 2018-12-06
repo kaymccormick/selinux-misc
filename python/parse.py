@@ -2,7 +2,7 @@ import sys
 import re
 import logging
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 def slurp_arg(contents, eat_comma=True):
@@ -99,7 +99,7 @@ def parse_file(filename, interface, template):
             pos = pos + match.end()
             cur_len = len(contents)
             if len(contents) and contents[0] == '(':
-                logging.warning(word)
+                logging.info(word)
                 contents = contents[1:].lstrip()
                 pos += 1
                 isend = False
