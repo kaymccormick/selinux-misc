@@ -10,7 +10,6 @@ ftypes=['AUPARSE_TYPE_UNCLASSIFIED','AUPARSE_TYPE_UID','AUPARSE_TYPE_GID','AUPAR
 
 import sqlite3
 import shutil
-from git import Repo
 import semanage
 import audit
 import auparse
@@ -39,64 +38,12 @@ import logging.config
 
 from yaml import load, dump
 
-import parse
+import selinux_misc.parse as parse
 
+logging.basicConfig(level=logging.WARNING)
+logger = logging.getLogger(__name__)
 
-x = sepolicy.gen_bool_dict()
-out = {}
-for k in x:
-    (module, default, desc) = x[k]
-    if module not in out:
-        out[module] = {}
-    out[module][k] = [desc, default]#list(dict(name=k, module=module, default=default, desc=desc).values())
-          
-output = dump(out,default_flow_style=False)
-
-# this doesnt work for wahtever reason
-logging_config = dict(version=1,
-                      loggers=dict(root=dict(level='DEBUG', handlers=['console'])),
-                      formatters=dict(generic=dict(format='%(asctime)s %(levelname)-5.5s [%(name)s:%(lineno)s][%(threadName)s] %(message)s')),
-                      handlers=dict(console={'class': 'logging.StreamHandler',
-                                             'level': 'DEBUG',
-                                             'stream': 'ext://sys.stdout',
-                                             'formatter': 'generic'}),
-                      
-                      )
-logging.config.dictConfig(logging_config)
-
-def process_line(rules, l):
-    l = l.rstrip()
-    if l.startswith('#'):
-        comment = l
-        return
-
-    match = re.match('^\s*(\S+)\s*\(\s*([^,\)]+)', l)
-    if match:
-        (iface, arg) = match.groups()
-        rest = l[match.end():]
-        json.dump(dict(iface=iface,arg1=arg,rest=rest), fp=sys.stderr, indent=4)
-        print("", file=sys.stderr)
-        if iface != "policy_module":
-            print(l, file=sys.stderr)
-            logger.warning("iface = %s, arg1 = %s" % (iface, arg))
-            rules.source(arg).add_iface_call(l)
-        
-    match = re.match('^allow\s+(\S+)\s+([^\s:]+):(\S+)\s+(.*);', l)#(?:\{((?:\s\S+){2,})\s\}|(\S+));$', l)
-    if match:
-        (source, target, class_, ops) = match.groups()
-        if ops.startswith('{'):
-            j = ops[2:-2].split(' ')
-        else:
-            j = [ops]
-
-
-        class_rules = rules.source(source).target(target).class_(class_)
-        
-        for op in j:
-            if class_rules.has_op(op):
-                logger.warning("op already in %s/%s/%s/%s", source, target, class_, op)
-            else:
-                class_rules.has_op(op, True)
+allow_regexp = r'^allow\s+(\S+)\s+([^\s:]+):(\S+)\s+(.*);'
                 
 class NameMixin:
     @property
@@ -234,272 +181,245 @@ class Rules(NameMixin):
         if host not in self._rules:
             self.add_host(host)
         return self._rules[host]
-        
 
-logger = logging.getLogger(__name__)
+class Manage:
+    def __init__(self, args, rules):
+        self._args = args
+        self._rules = rules
 
-hostmap = dict(netra='netra.heptet.us')
+    def is_type_enforcement(self, filename):
+        return filename.endswith('.te')
 
-ftypemap = {}
-for ftype in ftypes:
-    if hasattr(auparse, ftype):
-        ftypemap[getattr(auparse, ftype)] = ftype
-    
-
-cmd = Path(sys.argv[0])
-app_root = str(cmd.parent.absolute())
-
-host = socket.gethostname()
-
-parser = argparse.ArgumentParser(description="Manage SELinux modules")
-parser.add_argument('--scontext', action='store', dest='scontext', help='Limit scontext to comma separated list')
-# Audit2Allow argument
-parser.add_argument("-r", "--requires", action="store_true", dest="requires", default=False,
-                          help="generate require statements for rules")
-parser.add_argument("-D", "--dontaudit", action="store_true",
-                          dest="dontaudit", default=False,
-                          help="generate policy with dontaudit rules")
-parser.add_argument("-v", "--verbose", action="store_true", dest="verbose",
-                  default=False, help="explain generated output")
-parser.add_argument("-e", "--explain", action="store_true", dest="explain_long",
-                  default=False, help="fully explain generated output")
-parser.add_argument("--interface-info", dest="interface_info", help="file name of interface information")
-parser.add_argument("--perm-map", dest="perm_map", help="file name of perm map")
-parser.add_argument("-R", "--reference", action="store_true", dest="refpolicy",
-                    default=True, help="generate refpolicy style output")
-parser.add_argument("-N", "--noreference", action="store_false", dest="refpolicy", default=False, help="do not generate refpolicy style output")
-parser.add_argument('--hostname', help="Specify hostname (default is %s)" % host,
-                    default=host, action='store')
-parser.add_argument('--input-directory', help="Specify input source directory for SElinux modules", default="generated", action="store")
-parser.add_argument('--input-file', help="Specify audit log input for subprocess.",
-                    action="store")
-parser.add_argument('--search', '-s', help="Search the auditlog",
-                    action="store")
-args = parser.parse_args()
-
-rules = Rules("rules")
-
-# config file?
-git_root = "git"
-repo = {}
-for elem in Path(git_root).iterdir():
-    if elem.is_dir():
-        host = elem.name
-        repo[host] = Repo(str(elem.resolve()))
-        rules.add_host(host)
-        for file in elem.iterdir():
-            if not file.name.endswith('.te'):
-                continue
-            module = Module(rules.host(host), host, file.name[0:len(file.name) - 2])
+    def process_input_file(self, context, filename):
+        if self.is_type_enforcement(filename):
+            module_name = Path(filename).stem
+            module = Module(rules.context(context),
+                            context,
+                            module_name)
             module.load_from_file(file)
 
-
-main_temp = TemporaryDirectory(dir="tempdirs")
-print("main_temp = %s" % main_temp.name)
-tempdir = {}
-for host, host_repo in repo.items():
-    x = host.split('.')
-    x.reverse()
-    mod_prefix = '_'.join(x)
-
-    tempdir[host] = main_temp.name + "/" + host
-    os.mkdir(tempdir[host])
-    
-    print("tempdir for %s is %s" % (host, tempdir[host]))
-
-
-# I'm a bit unsure its wise to parse it but it sounded fun
-def mycb(aup, cb_event_type, user_data):
-    try:
-        r = _mycb(aup, cb_event_type, user_data)
-    except:
-        print("%s" % sys.exc_info()[1])
-        import traceback
-        traceback.print_tb(sys.exc_info()[2])
-
-
-def _mycb(aup, cb_event_type, user_data):
-    if cb_event_type == auparse.AUPARSE_CB_EVENT_READY:
-        if aup.first_record() < 0:
-            return
-
-        lines = []
-        while True:
-            event = aup.get_timestamp()
-            if not user_data['cur_event'] or user_data['cur_event']['serial'] != event.serial:
-                user_data['cur_event'] = dict(sec=event.sec, host=event.host, milli=event.milli, serial=event.serial, scontext=None)
-                lines.append("----")
-                dt = datetime.fromtimestamp(event.sec)
-                lines.append("time->%s" % dt)
         
-            mytype = aup.get_type_name()
-            #print("type=%s" %mytype)
-            message = mytype
-            spec = "%d.%03d:%d" % (event.sec, event.milli, event.serial)
-            message = "node=%s type=%s msg=audit(%s):" % (event.host, mytype, spec)
-            vars = ""
+    def process_input_directory(self, dir):
+        logger.debug("Processing input directory %r", dir)
+        for root, dirs, files in os.walk(dir):
+            context = root
+            for file in files:
+                filename = join(root, file)
+                process_input_file(context, filename)
+        
+    def process_input(self):
+        if self.args.input_directory:
+            self.process_input_directory(self.args.input_directory)
+
+    @property
+    def args(self):
+        return self._args
+
+    @args.setter
+    def args(self, new):
+        self._args = new
+
+    
+def main():
+    ftypemap = {}
+    for ftype in ftypes:
+        if hasattr(auparse, ftype):
+            ftypemap[getattr(auparse, ftype)] = ftype
+        
+    parser = argparse.ArgumentParser(description="Manage SELinux modules")
+    parser.add_argument('--scontext', action='store', dest='scontext', help='Limit scontext to comma separated list')
+    # Audit2Allow argument
+    parser.add_argument("-r", "--requires", action="store_true", dest="requires", default=False,
+                              help="generate require statements for rules")
+    parser.add_argument("-D", "--dontaudit", action="store_true",
+                              dest="dontaudit", default=False,
+                              help="generate policy with dontaudit rules")
+    parser.add_argument("-v", "--verbose", action="store_true", dest="verbose",
+                      default=False, help="explain generated output")
+    parser.add_argument("-e", "--explain", action="store_true", dest="explain_long",
+                      default=False, help="fully explain generated output")
+    parser.add_argument("--interface-info", dest="interface_info", help="file name of interface information")
+    parser.add_argument("--perm-map", dest="perm_map", help="file name of perm map")
+    parser.add_argument("-R", "--reference", action="store_true", dest="refpolicy",
+                        default=True, help="generate refpolicy style output")
+    parser.add_argument("-N", "--noreference", action="store_false", dest="refpolicy", default=False, help="do not generate refpolicy style output")
+    parser.add_argument('--hostname', help="Specify hostname",
+                    action='store')
+    parser.add_argument('--input-directory', help="Specify input source directory for SElinux modules", action="store")
+    parser.add_argument('--input-file', help="Specify audit log input for subprocess.",
+                        action="store")
+    parser.add_argument('--search', '-s', help="Search the auditlog",
+                        action="store")
+
+    args = parser.parse_args()
+    rules = Rules("rules")
+
+    manage_instance = Manage(args=args,rules=rules)
+    manage_instance.process_input()
+    
+    # I'm a bit unsure its wise to parse it but it sounded fun
+    def mycb(aup, cb_event_type, user_data):
+        try:
+            r = _mycb(aup, cb_event_type, user_data)
+        except:
+            print("%s" % sys.exc_info()[1])
+            import traceback
+            traceback.print_tb(sys.exc_info()[2])
+    
+    
+    def _mycb(aup, cb_event_type, user_data):
+        if cb_event_type == auparse.AUPARSE_CB_EVENT_READY:
+            if aup.first_record() < 0:
+                return
+    
+            lines = []
             while True:
-                f = aup.get_field_name()
-                if not f in ("node", "type"):
-                    t = aup.get_field_type()
-                    v = aup.get_field_str()
-                    procvar = False
-                    if mytype == "AVC":
-                        if f == "seresult":
-                            message = message + " avc:  " + v
-                            procvar = True
-                        elif f == "seperms":
-                            message = message + "  { " + v + " } for "
-                            procvar = True
-                        elif f == "scontext":
-                            user_data['cur_event']['scontext'] = v
-
-                    if not procvar:
-                        vars = vars + " " + f + "=" + v
-                
-                if not aup.next_field(): break
-
-            message = message + vars
-            lines.append(message)
-            if not aup.next_record(): break
-
-        if event.host in hostmap:
-            mapped_host = hostmap[event.host]
-        else:
-            mapped_host = event.host
-        if mapped_host not in user_data['log']:
-            user_data['log'][mapped_host] = []
-
-        user_data['log'][mapped_host].extend(lines)
-
-try:
-    lines = None
-    ausearch_out = None
-    audit_lines = []
-
-    if args.search:
-        ausearch_proc = subprocess.Popen(['/sbin/ausearch', *(args.search.split(' '))], stdout=subprocess.PIPE)
-        if ausearch_proc.returncode:
-            print("ausearch subprocess failed");
-            exit(1)
-
-    assert ausearch_proc.stdout
-
-    cmd = ['audit2allow']
-    if args.refpolicy:
-        cmd.append('-R')
-    cmd.extend(['--interface-info', repo[host].working_tree_dir + '/interface_info',
-                '--perm-map', repo[host].working_tree_dir + '/perm_map'])
+                event = aup.get_timestamp()
+                if not user_data['cur_event'] or user_data['cur_event']['serial'] != event.serial:
+                    user_data['cur_event'] = dict(sec=event.sec, host=event.host, milli=event.milli, serial=event.serial, scontext=None)
+                    lines.append("----")
+                    dt = datetime.fromtimestamp(event.sec)
+                    lines.append("time->%s" % dt)
+            
+                mytype = aup.get_type_name()
+                #print("type=%s" %mytype)
+                message = mytype
+                spec = "%d.%03d:%d" % (event.sec, event.milli, event.serial)
+                message = "node=%s type=%s msg=audit(%s):" % (event.host, mytype, spec)
+                vars = ""
+                while True:
+                    f = aup.get_field_name()
+                    if not f in ("node", "type"):
+                        t = aup.get_field_type()
+                        v = aup.get_field_str()
+                        procvar = False
+                        if mytype == "AVC":
+                            if f == "seresult":
+                                message = message + " avc:  " + v
+                                procvar = True
+                            elif f == "seperms":
+                                message = message + "  { " + v + " } for "
+                                procvar = True
+                            elif f == "scontext":
+                                user_data['cur_event']['scontext'] = v
     
-    ausearch_output = b""
-    all_allow_out = b""
-
-    aup = auparse.AuParser(auparse.AUSOURCE_FEED)
-    user_data = dict(cur_event=None, log={})
-    aup.add_callback(mycb, user_data)
+                        if not procvar:
+                            vars = vars + " " + f + "=" + v
+                    
+                    if not aup.next_field(): break
     
-    while ausearch_proc.returncode is None:
-        (stdout, stderr) = ausearch_proc.communicate()
-        ausearch_output = ausearch_output + stdout
-
-        #        (allow_out, allow_err) = audit2allowproc.communicate(stdout)
-        #        all_allow_out = all_allow_out + allow_out
+                message = message + vars
+                lines.append(message)
+                if not aup.next_record(): break
+    
+            if event.host in hostmap:
+                mapped_host = hostmap[event.host]
+            else:
+                mapped_host = event.host
+            if mapped_host not in user_data['log']:
+                user_data['log'][mapped_host] = []
+    
+            user_data['log'][mapped_host].extend(lines)
+    
+    try:
+        lines = None
+        ausearch_out = None
+        audit_lines = []
+    
+        if args.search:
+            ausearch_proc = subprocess.Popen(['/sbin/ausearch', *(args.search.split(' '))], stdout=subprocess.PIPE)
+            if ausearch_proc.returncode:
+                print("ausearch subprocess failed");
+                exit(1)
+    
+        assert ausearch_proc.stdout
+    
+        cmd = ['audit2allow']
+        if args.refpolicy:
+            cmd.append('-R')
+        cmd.extend(['--interface-info', repo[host].working_tree_dir + '/interface_info',
+                    '--perm-map', repo[host].working_tree_dir + '/perm_map'])
         
-        result = aup.feed(stdout)
-
-    aup.flush_feed()
-    aup = None
-
-    env = Environment(
-        loader=FileSystemLoader(app_root),
-        trim_blocks=True,
-        lstrip_blocks=True,
-        autoescape=False,
-        )
-
-    print(user_data['log'].keys(), sep="\t")
-    for host in user_data['log']:
-        x = host.split('.')
-        x.reverse()
-        mod_prefix = '_'.join(x)
-
-        print("processing %s" % host)
-        audit2allowproc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        (allow_out, allow_err) = audit2allowproc.communicate(bytes('\n'.join(user_data['log'][host]) + '\n', encoding='utf-8'))
+        ausearch_output = b""
+        all_allow_out = b""
+    
+        aup = auparse.AuParser(auparse.AUSOURCE_FEED)
+        user_data = dict(cur_event=None, log={})
+        aup.add_callback(mycb, user_data)
         
-        print(allow_out)
+        while ausearch_proc.returncode is None:
+            (stdout, stderr) = ausearch_proc.communicate()
+            ausearch_output = ausearch_output + stdout
     
-        allow = allow_out.decode('utf-8')
-        lines = allow.split('\n')
-
-        source = None
-        for line in lines:
-            try:
-                process_line(rules.host(host), line)
-            except Exception  as ex:
-                raise ex
-
-        for source, sourcerules in rules.host(host)._rules.items():
-            name = source[0:-2]
-            module_name = '%s_%s' % (mod_prefix, name)
-            t = env.get_template('module.jinja2')
-            classes = {}
-            rulesary = []
-            types = { source: True }
-            for target in sorted(sourcerules._rules.keys()):
-                targetrules = sourcerules._rules[target]
-                if not (target in types or target in ('self')):
-                    types[target] = True
-                
-                for class_ in sorted(targetrules._rules.keys()):
-                    ops = targetrules._rules[class_]._rules.keys()
-                    rulesary.append('allow %s %s:%s { %s };' % (source, target, class_, ' '.join(sorted(ops))))
-                    if not class_ in classes:
-                        classes[class_] = {}
-                    for op in ops:
-                        classes[class_][op] = True
-
-            for iface in sorted(sourcerules._iface_calls.keys()):
-                calls = sourcerules._iface_calls[iface]
-                for rest in sorted(calls.keys()):
-                    rulesary.append("%s(%s%s)" % (iface, source, rest))
-                
-            fname = tempdir[host] + '/%s.te' % module_name;
-            print("writing %s" % fname)
-            classes2 = {}
-            for k, v in classes.items():
-                classes2[k] = list(sorted(v.keys()))
-
-            with open(fname, 'w') as f:
-                print(t.render(module_name=module_name,
-                               sclasses=sorted(classes2.keys()),
-                       classes=classes2,
-                       rules=rulesary,
-                               types=sorted(types.keys())), file=f)
+            result = aup.feed(stdout)
     
-#            mod_fname = tempdir[host] + '/%s.mod' % module_name
-#            r = subprocess.run(['checkmodule', '-o', mod_fname, '-m', fname], stdout=subprocess.PIPE)
-#            if r.returncode:
-#    #            print(r.stderr.decode('utf-8'), file=sys.stderr)
-#                print(fname)
-#                exit(1)
-#    
-#            pp_out = tempdir[host] + '/%s.pp' % module_name
-#            r = subprocess.run(['semodule_package', '-o', pp_out, '-m', mod_fname], stdout=subprocess.PIPE)
-#            if r.returncode:
-#    #            print(r.stderr.decode('utf-8'), file=sys.stderr)
-#                exit(1)
-#    
-    print(tempdir)
-except Exception as ex:
-    raise ex
-finally:
-    output_dir = "output"
-    shutil.rmtree(output_dir)
-    os.mkdir(output_dir)
-    for host, dir in tempdir.items():
-        shutil.copytree(dir, "%s/%s" % (output_dir, host))
+        aup.flush_feed()
+        aup = None
     
-#json.dump(rules, fp=sys.stdout, indent=4)
-os.chdir(app_root)
-
+        env = Environment(
+            loader=FileSystemLoader(app_root),
+            trim_blocks=True,
+            lstrip_blocks=True,
+            autoescape=False,
+            )
+    
+        print(user_data['log'].keys(), sep="\t")
+        for host in user_data['log']:
+            x = host.split('.')
+            x.reverse()
+            mod_prefix = '_'.join(x)
+    
+            logger.info("processing %s" % host)
+            audit2allowproc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            (allow_out, allow_err) = audit2allowproc.communicate(bytes('\n'.join(user_data['log'][host]) + '\n', encoding='utf-8'))
+            
+            allow = allow_out.decode('utf-8')
+            lines = allow.split('\n')
+    
+            source = None
+            for line in lines:
+                try:
+                    process_line(rules.host(host), line)
+                except Exception  as ex:
+                    raise ex
+    
+            for source, sourcerules in rules.host(host)._rules.items():
+                name = source[0:-2]
+                module_name = '%s_%s' % (mod_prefix, name)
+                t = env.get_template('module.jinja2')
+                classes = {}
+                rulesary = []
+                types = { source: True }
+                for target in sorted(sourcerules._rules.keys()):
+                    targetrules = sourcerules._rules[target]
+                    if not (target in types or target in ('self')):
+                        types[target] = True
+                    
+                    for class_ in sorted(targetrules._rules.keys()):
+                        ops = targetrules._rules[class_]._rules.keys()
+                        rulesary.append('allow %s %s:%s { %s };' % (source, target, class_, ' '.join(sorted(ops))))
+                        if not class_ in classes:
+                            classes[class_] = {}
+                        for op in ops:
+                            classes[class_][op] = True
+    
+                for iface in sorted(sourcerules._iface_calls.keys()):
+                    calls = sourcerules._iface_calls[iface]
+                    for rest in sorted(calls.keys()):
+                        rulesary.append("%s(%s%s)" % (iface, source, rest))
+                    
+                fname = tempdir[host] + '/%s.te' % module_name;
+                print("writing %s" % fname)
+                classes2 = {}
+                for k, v in classes.items():
+                    classes2[k] = list(sorted(v.keys()))
+    
+                with open(fname, 'w') as f:
+                    print(t.render(module_name=module_name,
+                                   sclasses=sorted(classes2.keys()),
+                           classes=classes2,
+                           rules=rulesary,
+                                   types=sorted(types.keys())), file=f)
+        
+    except Exception as ex:
+        raise ex
