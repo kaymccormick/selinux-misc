@@ -65,22 +65,41 @@ class ParseContext:
         self._template = {}
         self._flags = 0
         self._line = None
+        self._handle_comment = None
 
     def open(self):
         self._file = open(self._filename, 'r')
         return self._file
 
-    def match(self, pattern):
+    def log_status(self, log_cb):
+        log_cb("STATUS: Line is %r" % self._line)
+        log_cb("STATUS: tell pos = %d" % self._file.tell())
+
+    def match(self, pattern, consume=True):
+        # probably shoudn't read within match ?
         while not self._line or self._line.isspace():
             self._line = self._file.readline()
             if not self._line:
                 return None
-        logger.critical("matching against %r", pattern)
-        log_content(logger.critical, self._line)
+        self.log_status(logger.debug)
+        logger.debug("matching against %r", pattern)
+        log_content(logger.debug, self._line)
         match_result = re.match(pattern, self._line)
         if not match_result:
+            logger.debug("No match")
             return None
-        self._line = self._line[match_result.end()]
+
+        logger.debug("Match is %r", match_result)
+        if consume:
+            if len(self._line) > match_result.end():
+                try:
+                    self._line = self._line[match_result.end():]
+                except IndexError:
+                    logger.critical("end is %d", match_result.end())
+                    log_content(logger.critical, self._line)
+            else:
+                self._line = None
+            
         return match_result
         
     @property
@@ -146,39 +165,29 @@ class Interface(ParseEntry):
         return "Interface(%r, %r, %r)" % (self._name, self._file, self._file_pos)
 
 def log_content(logcall, contents):
-    logcall("contents: %r" % contents[0:32])
+    logcall("log_content [len=%d]: %r" % (len(contents), contents[0:32]))
 
 
-def slurp_arg(pcontext, contents, eat_comma=True):
-    log_content(logger.debug, contents)
+def slurp_arg(pcontext,eat_comma=True):
+    pcontext.log_status(logger.debug)
 
     quoted = False
-    if(contents[0] == '`'):
-        contents = contents[1:]
+    if pcontext.match(r'`'):
         quoted = True
 
     logger.debug("slurp_arg (%r)", quoted)
-    log_content(logger.debug, contents)
         
     argument = ''
     while True:
-        contents = contents.lstrip()
-        log_content(logger.debug, contents)
-        match = COMMENT_PATTERN.match(contents)
+        match = pcontext.match(COMMENT_PATTERN)
         if match:
-            contents = contents[match.end():]
             continue
 
-        if quoted:
-            match = QUOTED_PATTERN.match(contents)
-        else:
-            match = UNQUOTED_PATTERN.match(contents)
-            
+        pattern = quoted and QUOTED_PATTERN or UNQUOTED_PATTERN
+        match = pcontext.match(pattern)
         if match:
             argument += match.group(1)
             logger.debug("match = %r", match)
-            contents = contents[match.end():]
-            log_content(logger.debug, contents)
             termchar = '\''
             if not quoted:
                 termchar = ''
@@ -194,21 +203,19 @@ def slurp_arg(pcontext, contents, eat_comma=True):
                 else:
                     pattern = UNQUOTED_ARG_TERM_PATTERN
                     
-            submatch = pattern.match(contents)
+            submatch = pcontext.match(pattern)
 
             if submatch:
-                contents = contents[submatch.end():]
                 isend = eat_comma and submatch.group(1).find(')') != -1
                 logger.debug("submatch: %r", submatch)
-                log_content(logger.debug, contents)
-                return (contents, argument, isend)
+                return (True, argument, isend)
 
-            if contents[0] == '`':
-                (contents,result,isend) = slurp_arg(pcontext, contents)
-                log_content(logger.debug, contents)
+            if pcontext.match(r'`', consume=False):
+                (r,result,isend) = slurp_arg(pcontext)
                 argument += result
 
-    return (contents,None,True)
+    return (True,None,True)
+
 
 def parse_comment(pcontext):
     match = pcontext.match(COMMENT2_PATTERN)
@@ -248,7 +255,6 @@ def parse_next(pcontext):
 
     
     logger.debug("pos = %d", pcontext.pos)
-    logger.critical("tell pos = %d", pcontext._file.tell())
     
 #    cur_len = len(contents)
 #    contents = contents.lstrip()
@@ -258,16 +264,18 @@ def parse_next(pcontext):
     preinvoke_pos = pcontext.pos
     match = pcontext.match(INVOKEMACRO_PATTERN)
     if not match:
-        raise ParseError(pcontext._filename, pcontext.pos)
+        return (False, None)
+        #raise ParseError(pcontext._filename, pcontext.pos)
         
     word = match.group(1)
+    logger.debug("word is %r", word)
 #    logger.debug("incrementing position (%d) by %d (to %d)", pcontext.pos,
 #                 match.end(), pcontext.pos + match.end())
 #    pcontext.pos = pcontext.pos + match.end()
     
     cur_tuple = ()
     line = "" # fixme
-    match = pcontext.match(r'^\(')
+    match = pcontext.match(r'\(')
     if match:
 #    if len(line) and line[0] == '(':
 #        logger.debug(word)
@@ -278,7 +286,7 @@ def parse_next(pcontext):
         isend = False
         cmd = word
         args = []
-        #        old_len = len(line)
+        #old_len = len(line)
         if cmd == "interface":
             (line, name, isend) = slurp_arg(pcontext)#, line)
             ary = []
@@ -286,13 +294,13 @@ def parse_next(pcontext):
             pcontext.interface[name] = my_interface
             args.append(name)
         if cmd == "template":
-            (line, name, isend) = slurp_arg(pcontext, line)
+            (line, name, isend) = slurp_arg(pcontext)
             args.append(name)
             ary = []
             pcontext.template[name] = (pcontext._filename, pcontext.pos, ary)
 
         while not isend:
-            (new_c, arg, isend) = slurp_arg(pcontext, line)
+            (new_c, arg, isend) = slurp_arg(pcontext)
             logger.debug("Slurped argument (len %d): %s" %( len(arg), arg))
             args.append(arg)
             
@@ -302,11 +310,11 @@ def parse_next(pcontext):
 
             line = new_c
 
-        logger.debug("incrementing position (%d) by %d (to %d)", pcontext.pos,
-                     old_len - len(line), pcontext.pos + (old_len - len(line)))
-        pcontext.pos += old_len - len(line)
+#        logger.debug("incrementing position (%d) by %d (to %d)", pcontext.pos,
+#                     old_len - len(line), pcontext.pos + (old_len - len(line)))
+#        pcontext.pos += old_len - len(line)
 
-        return (True, cmd, args)
+        return (True, [cmd, args])
     else:
         logger.info("i am here with %s", word)
 
@@ -321,7 +329,8 @@ def parse_file(filename, interface, template, preserve_comments=True):
 
 def parse(pcontext):
     file_ary = []
-    while True:
+    r = True
+    while r:
         (r, parse_entry) = parse_next(pcontext)
         if parse_entry:
             logger.debug("parse_entry = %r", parse_entry)
@@ -329,11 +338,11 @@ def parse(pcontext):
     return file_ary
     
 
-if __name__ == '__main__':
+def main():
     import sys
     import json
 
-    logging.basicConfig(level=logging.WARNING)
+    logging.basicConfig(level=logging.DEBUG)
     
     interface = {}
     template = {}
@@ -349,7 +358,7 @@ if __name__ == '__main__':
         logger.info(filename)
         r = parse_file(filename, interface, template, preserve_comments=False)
         print(filename, file=sys.stdout)
-        json.dump(r, fp=sys.stdout, indent=4)
+        #json.dump(r, fp=sys.stdout, indent=4)
     
     for iface in interface.keys():
         (file, pos, ary) = interface[iface]
@@ -360,3 +369,5 @@ if __name__ == '__main__':
         print("T:%24s %s:%4d" % (iface, file, pos))
 
     
+if __name__ == "__main__":
+    main()
