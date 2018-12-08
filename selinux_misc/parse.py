@@ -28,7 +28,11 @@ COMMENT2_PATTERN = re.compile(COMMENT2_REGEXP)
 INVOKEMACRO_REGEXP = r'(?am)^\s*([-!&~{}:/\w_"\*\$,\.;]+)\s*'
 INVOKEMACRO_PATTERN = re.compile(INVOKEMACRO_REGEXP)
 
-TAG_REGEXP = r'(?am)(<([^\s/][^\s>]+)(\s+[^>]*)?>)(.*)((</\2>)(.*))?$'
+#TAG_REGEXP = r'(?am)(<([^\s/][^\s>]+)(\s+[^>]*)?>)(.*)((</\2>)(.*))?$'
+TAG_REGEXP = r'(?am)(<([^\s/][^\s>]+)(\s+[^>]*)?>)(.*)((</$2>)(.*))?$'
+
+class NoParse(Exception):
+    pass
 
 class ParseError(Exception):
     def __init__(self, file, pos):
@@ -60,6 +64,24 @@ class ParseContext:
         self._interface = {}
         self._template = {}
         self._flags = 0
+        self._line = None
+
+    def open(self):
+        self._file = open(self._filename, 'r')
+        return self._file
+
+    def match(self, pattern):
+        while not self._line or self._line.isspace():
+            self._line = self._file.readline()
+            if not self._line:
+                return None
+        logger.critical("matching against %r", pattern)
+        log_content(logger.critical, self._line)
+        match_result = re.match(pattern, self._line)
+        if not match_result:
+            return None
+        self._line = self._line[match_result.end()]
+        return match_result
         
     @property
     def pos(self):
@@ -76,6 +98,14 @@ class ParseContext:
     @property
     def template(self):
         return self._template
+
+    @property
+    def handle_comment(self):
+        return self._handle_comment
+
+    @handle_comment.setter
+    def handle_comment(self, new):
+        self._handle_comment =  new
 
         
 class NameMixin:
@@ -116,10 +146,10 @@ class Interface(ParseEntry):
         return "Interface(%r, %r, %r)" % (self._name, self._file, self._file_pos)
 
 def log_content(logcall, contents):
-    logcall(contents[0:32])
+    logcall("contents: %r" % contents[0:32])
 
 
-def slurp_arg(contents, eat_comma=True):
+def slurp_arg(pcontext, contents, eat_comma=True):
     log_content(logger.debug, contents)
 
     quoted = False
@@ -172,125 +202,132 @@ def slurp_arg(contents, eat_comma=True):
                 logger.debug("submatch: %r", submatch)
                 log_content(logger.debug, contents)
                 return (contents, argument, isend)
-                    
+
             if contents[0] == '`':
-                (contents,result,isend) = slurp_arg(contents)
+                (contents,result,isend) = slurp_arg(pcontext, contents)
                 log_content(logger.debug, contents)
                 argument += result
 
     return (contents,None,True)
 
+def parse_comment(pcontext):
+    match = pcontext.match(COMMENT2_PATTERN)
+    if not match:
+        raise NoParse
+    (comment,) = match.groups()
+    if comment.find('<') != -1:
+        logger.warning("looking for tag")
+        tag_match = re.search(TAG_REGEXP, comment)
+        if tag_match:
+            logger.warning("match is %r (%r)", match, len(match.groups()))
+            tag = tag_match.group(1)
+            tag_name = tag_match.group(2)
+            if tag_match.group(5):
+                tag_content = tag_match.group(4)
+                logger.critical("tg_content=%r", tag_content)
+            if tag_name == 'summary':
+                #pcontext.flags |= IN_SUMMARY
+                pass
 
-def parse_next(pcontext, contents):
-    match = COMMENT2_PATTERN.match(contents)
-    if match:
-        (comment,) = match.groups()
-        if comment.find('<') != -1:
-            logger.warning("looking for tag")
-            tag_match = re.search(TAG_REGEXP, comment)
-            if tag_match:
-                logger.warning("match is %r (%r)", match, match.groups())
-                tag = tag_match.group(1)
-                tag_name = tag_match.group(2)
-                if tag_match.group(5):
-                    tag_content = tag_match.group(4)
-                    logger.critical("tg_content=%r", tag_content)
-                if tag_name == 'summary':
-                    #pcontext.flags |= IN_SUMMARY
-                    pass
+            comment_text = tag_match.group(4)
+            logger.info("comment text is %r", comment_text)
+            
+    logger.debug("incrementing position (%d) by %d (to %d)", pcontext.pos,
+                 match.end(), pcontext.pos + match.end())
+    pcontext.pos += match.end()
+    return (True, CommentParseEntry(comment))
 
-                comment_text = tag_match.group(4)
-                logger.info("comment text is %r", comment_text)
-                
-        contents = contents[match.end():]
-        logger.debug("incrementing position (%d) by %d (to %d)", pcontext.pos,
-                     match.end(), pcontext.pos + match.end())
-        pcontext.pos += match.end()
-        return (contents, CommentParseEntry(comment))
+def parse_next(pcontext):
+    try:
+        (r, comment) = parse_comment(pcontext)
+        if pcontext.handle_comment:
+            pcontext.handle_comment(pcontext, comment)
+        return (r, comment)
+    except NoParse:
+        pass
 
+    
     logger.debug("pos = %d", pcontext.pos)
-    cur_len = len(contents)
-    contents = contents.lstrip()
-    pcontext.pos += cur_len - len(contents)
+    logger.critical("tell pos = %d", pcontext._file.tell())
+    
+#    cur_len = len(contents)
+#    contents = contents.lstrip()
+#    pcontext.pos += cur_len - len(contents)
     logger.debug("pos = %d", pcontext.pos)
 
     preinvoke_pos = pcontext.pos
-    logger.debug("matching against %r", INVOKEMACRO_PATTERN.pattern)
-    log_content(logger.debug, contents)
-    match = INVOKEMACRO_PATTERN.match(contents)
-    logger.debug("match = %r", match)
+    match = pcontext.match(INVOKEMACRO_PATTERN)
     if not match:
-        log_content(logger.debug, contents)
-        lines = contents.split('\n')
-        logger.critical("beep: (%s:%d) %s",filename, pcontext.pos,lines[0])
-        raise ParseError()
+        raise ParseError(pcontext._filename, pcontext.pos)
         
     word = match.group(1)
-    contents = contents[match.end():]
-    logger.debug("incrementing position (%d) by %d (to %d)", pcontext.pos,
-                 match.end(), pcontext.pos + match.end())
-    pcontext.pos = pcontext.pos + match.end()
+#    logger.debug("incrementing position (%d) by %d (to %d)", pcontext.pos,
+#                 match.end(), pcontext.pos + match.end())
+#    pcontext.pos = pcontext.pos + match.end()
     
     cur_tuple = ()
-    if len(contents) and contents[0] == '(':
-        logger.debug(word)
+    line = "" # fixme
+    match = pcontext.match(r'^\(')
+    if match:
+#    if len(line) and line[0] == '(':
+#        logger.debug(word)
         
-        contents = contents[1:].lstrip()
-        pcontext.pos += 1
+#        line = line[1:].lstrip()
+#        pcontext.pos += 1
         
         isend = False
         cmd = word
         args = []
-        old_len = len(contents)
+        #        old_len = len(line)
         if cmd == "interface":
-            (contents, name, isend) = slurp_arg(contents)
+            (line, name, isend) = slurp_arg(pcontext)#, line)
             ary = []
             my_interface = Interface(name, pcontext._filename, preinvoke_pos)
             pcontext.interface[name] = my_interface
             args.append(name)
         if cmd == "template":
-            (contents, name, isend) = slurp_arg(contents)
+            (line, name, isend) = slurp_arg(pcontext, line)
             args.append(name)
             ary = []
             pcontext.template[name] = (pcontext._filename, pcontext.pos, ary)
 
         while not isend:
-            (new_c, arg, isend) = slurp_arg(contents)
+            (new_c, arg, isend) = slurp_arg(pcontext, line)
             logger.debug("Slurped argument (len %d): %s" %( len(arg), arg))
             args.append(arg)
             
             if arg is None:
-                log_content(logger.debug, contents)
+                log_content(logger.debug, line)
                 raise ParseError(file, pcontext.pos)
 
-            contents = new_c
+            line = new_c
 
         logger.debug("incrementing position (%d) by %d (to %d)", pcontext.pos,
-                     old_len - len(contents), pcontext.pos + (old_len - len(contents)))
-        pcontext.pos += old_len - len(contents)
+                     old_len - len(line), pcontext.pos + (old_len - len(line)))
+        pcontext.pos += old_len - len(line)
 
-        return (contents, cmd, args)
+        return (True, cmd, args)
     else:
         logger.info("i am here with %s", word)
 
-    return (contents, None)
+    return (True, None)
 
 
 def parse_file(filename, interface, template, preserve_comments=True):
     pcontext = ParseContext(filename)
-    pos = 0
+    pcontext.open()
+    return parse(pcontext)
+
+
+def parse(pcontext):
     file_ary = []
-    with open(filename, 'r') as f:
-        comments = []
-        contents = ''.join(f.readlines())
-        in_summary = False
-        comment_text = ''
-        while contents.strip():
-            (contents, parse_entry, *x) = parse_next(pcontext, contents)
-            if parse_entry:
-                logger.debug("parse_entry = %r", parse_entry)
-            file_ary.append(parse_entry)
+    while True:
+        (r, parse_entry) = parse_next(pcontext)
+        if parse_entry:
+            logger.debug("parse_entry = %r", parse_entry)
+        file_ary.append(parse_entry)
     return file_ary
+    
 
 if __name__ == '__main__':
     import sys
@@ -321,3 +358,5 @@ if __name__ == '__main__':
     for iface in template.keys():
         (file, pos, ary) = template[iface]
         print("T:%24s %s:%4d" % (iface, file, pos))
+
+    
